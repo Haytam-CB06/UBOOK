@@ -563,7 +563,7 @@ async def oauth_callback(provider: OAuthProvider, request: Request, response: Re
 
 @router.post("/refresh")
 def refresh(payload: RefreshRequest | None = None, request: Request = None, response: Response = None, db: Session = Depends(get_db)):
-    refresh_token = payload.refresh_token if payload and payload.refresh_token else request.cookies.get("ubook_refresh_token")
+    refresh_token = (payload.refresh_token if payload and payload.refresh_token else request.cookies.get("ubook_refresh_token"))    
     if not refresh_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token required")
     try:
