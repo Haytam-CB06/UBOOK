@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     mongodb_url: str = "mongodb://localhost:27017"
     mongodb_database: str = "ubook_pricing"
 
-    cors_origins: str = "http://localhost:5173/,http://localhost:3000,http://127.0.0.1:5173,https://ubook-s9ns.onrender.com,https://ubook-s9ns.onrender.com/"
-    frontend_url: str = "http://localhost:5173/,https://ubook-s9ns.onrender.com/,https://ubook-s9ns.onrender.com"
+    cors_origins: str = "http://localhost:5173/,http://localhost:3000,http://127.0.0.1:5173,https://ubook-f.onrender.com,https://ubook-f.onrender.com/"
+    frontend_url: str = "http://localhost:5173/,https://ubook-f.onrender.com/,https://ubook-f.onrender.com"
     auto_create_tables: bool = False
     auto_seed: bool = False
     rate_limit_requests: int = 120
