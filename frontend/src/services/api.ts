@@ -707,5 +707,4 @@ export async function compareTravelDestinations(destinationIds: number[]): Promi
   return response.data;
 }
 
-export type { SmartTravelFilter };
 
