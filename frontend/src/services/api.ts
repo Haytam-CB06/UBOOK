@@ -1,5 +1,5 @@
 import axios from "axios";
-import { storeSessionRole, clearStoredSessionRole } from "../auth/roles.ts";
+import { storeSessionRole, clearStoredSessionRole } from "../auth/roles";
 import type {
   AdminStats,
   Conversation,
@@ -17,7 +17,68 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
 const SESSION_EXPIRES_AT_KEY = "ubook_session_expires_at";
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+export interface PaymentOverview {
+  totalPaid?: number;
+  totalPending?: number;
+  totalRefunded?: number;
+  currency?: string;
+  recentPayments?: unknown[];
+}
 
+export interface WalletAccount {
+  id: string;
+  balance: number;
+  currency: string;
+  status?: string;
+}
+
+export interface PaymentMethod {
+  id: string;
+  type: string;
+  brand?: string;
+  last4?: string;
+  expiryMonth?: number;
+  expiryYear?: number;
+  isDefault?: boolean;
+}
+
+export interface ReviewCenter {
+  reviews?: unknown[];
+  averageRating?: number;
+  totalReviews?: number;
+}
+
+export interface SmartTravelFilter {
+  key: string;
+  value: string | number | boolean;
+}
+
+export interface SmartTravelFinderRequest {
+  query?: string;
+  destination?: string;
+  dates?: {
+    start?: string;
+    end?: string;
+  };
+  guests?: number;
+  filters?: SmartTravelFilter[];
+}
+
+export interface SmartTravelSearchResponse {
+  results: unknown[];
+  total?: number;
+  filters?: SmartTravelFilter[];
+}
+
+export interface ConversationalTravelResponse {
+  message: string;
+  suggestions?: unknown[];
+}
+
+export interface DestinationComparisonResponse {
+  destinations: unknown[];
+  recommendation?: string;
+}
 const client = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
