@@ -1,0 +1,2 @@
+"""UBOOK FastAPI backend."""
+
