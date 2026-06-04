@@ -46,7 +46,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Area,
@@ -169,6 +169,67 @@ const navByRole = {
 
 const easing = [0.22, 1, 0.36, 1] as const;
 const sourceColors = ["#E86D4A", "#2F8F83", "#1F2937", "#D89A24"];
+
+type AuthUserLike = {
+  role?: string;
+  rawRole?: string;
+  raw_role?: string;
+  requiresHostOnboarding?: boolean;
+  requires_host_onboarding?: boolean;
+};
+
+function normalizedWorkspaceRole(role?: string | null): "Traveler" | "Host" | "Admin" {
+  const value = String(role || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+
+  if (["admin", "super_admin", "administrator"].includes(value)) {
+    return "Admin";
+  }
+
+  if (["host", "hotel_admin", "property_owner", "property_manager", "owner"].includes(value)) {
+    return "Host";
+  }
+
+  return "Traveler";
+}
+
+function workspacePathForUser(user?: AuthUserLike | null) {
+  const role = normalizedWorkspaceRole(user?.role || user?.rawRole || user?.raw_role);
+
+  if (role === "Admin") {
+    return "/admin";
+  }
+
+  if (role === "Host") {
+    return user?.requiresHostOnboarding || user?.requires_host_onboarding ? "/host/onboarding" : "/host";
+  }
+
+  return "/dashboard";
+}
+
+function safeRedirectPath(value: string | null | undefined, fallback: string) {
+  if (!value) {
+    return fallback;
+  }
+
+  if (!value.startsWith("/") || value.startsWith("//")) {
+    return fallback;
+  }
+
+  if (["/login", "/register", "/forgot-password", "/verify-email"].includes(value)) {
+    return fallback;
+  }
+
+  return value;
+}
+
+function getApiErrorMessage(error: unknown, fallback = "Something went wrong. Please try again.") {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -621,12 +682,14 @@ function WorkspaceShell({
 }) {
   const [mobileNav, setMobileNav] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const nav = navByRole[role];
   const roleLabel = role === "traveler" ? "Traveler" : role === "host" ? "Host" : "Admin";
 
   const handleSignOut = async () => {
     await logout();
-    navigate("/login");
+    queryClient.clear();
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -881,14 +944,47 @@ export function LandingPage() {
 
 function AuthShell({ mode }: { mode: "login" | "register" | "forgot" | "verify" }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [role, setRole] = useState<"Traveler" | "Host">("Traveler");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(searchParams.get("oauthError") || "");
 
-  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
-  const [tempToken, setTempToken] = useState("");
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(Boolean(searchParams.get("tempToken")));
+  const [tempToken, setTempToken] = useState(searchParams.get("tempToken") || "");
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+
+  const defaultRedirect = mode === "register" && role === "Host" ? "/host/onboarding" : "/dashboard";
+  const redirectTo = safeRedirectPath(searchParams.get("redirectTo") || (location.state as { from?: string } | null)?.from, defaultRedirect);
+
+  const goToWorkspace = (user?: AuthUserLike | null, fallback = redirectTo) => {
+    queryClient.invalidateQueries({ queryKey: ["current-user"] });
+    navigate(safeRedirectPath(fallback, workspacePathForUser(user)), { replace: true });
+  };
+
+  useEffect(() => {
+    const oauthTempToken = searchParams.get("tempToken");
+    const oauthError = searchParams.get("oauthError");
+
+    if (oauthTempToken) {
+      setTempToken(oauthTempToken);
+      setRequiresTwoFactor(true);
+      setError("");
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete("tempToken");
+        return next;
+      }, { replace: true });
+    }
+
+    if (oauthError) {
+      setError(oauthError.replace(/_/g, " "));
+    }
+  }, [searchParams, setSearchParams]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -899,44 +995,51 @@ function AuthShell({ mode }: { mode: "login" | "register" | "forgot" | "verify" 
 
     try {
       if (requiresTwoFactor) {
-        const response = await validateTwoFactor(tempToken, twoFactorCode.trim());
+        const code = useRecoveryCode ? undefined : twoFactorCode.replace(/\s+/g, "");
+        const backup = useRecoveryCode ? recoveryCode.trim() : undefined;
 
-        navigate(
-          response.user?.role === "Host"
-            ? "/host"
-            : response.user?.role === "Admin"
-              ? "/admin"
-              : "/dashboard"
-        );
+        if (!tempToken) {
+          setError("Your 2FA session expired. Please log in again.");
+          setRequiresTwoFactor(false);
+          return;
+        }
+
+        if (!code && !backup) {
+          setError(useRecoveryCode ? "Enter a recovery code." : "Enter your 6-digit authenticator code.");
+          return;
+        }
+
+        const response = await validateTwoFactor(tempToken, code, backup);
+        goToWorkspace(response.user);
         return;
       }
 
       if (mode === "forgot") {
-        await forgotPassword(String(form.get("email") || ""));
-        navigate("/verify-email");
+        await forgotPassword(String(form.get("email") || "").trim());
+        navigate("/login", { replace: true });
         return;
       }
 
       if (mode === "verify") {
         await verifyEmail();
-        navigate("/dashboard");
+        goToWorkspace(undefined, "/dashboard");
         return;
       }
 
       if (mode === "register") {
         const response = await register({
-          fullName: String(form.get("fullName") || ""),
-          email: String(form.get("email") || ""),
+          fullName: String(form.get("fullName") || "").trim(),
+          email: String(form.get("email") || "").trim(),
           password: String(form.get("password") || ""),
           role
         });
 
-        navigate(response.user?.role === "Host" ? "/host" : "/dashboard");
+        goToWorkspace(response.user, role === "Host" ? "/host/onboarding" : "/dashboard");
         return;
       }
 
       const response = await login({
-        email: String(form.get("email") || ""),
+        email: String(form.get("email") || "").trim(),
         password: String(form.get("password") || "")
       });
 
@@ -944,24 +1047,29 @@ function AuthShell({ mode }: { mode: "login" | "register" | "forgot" | "verify" 
         setTempToken(response.tempToken || response.temp_token || "");
         setRequiresTwoFactor(true);
         setTwoFactorCode("");
+        setRecoveryCode("");
+        setUseRecoveryCode(false);
         return;
       }
 
-      navigate(
-        response.user?.role === "Host"
-          ? "/host"
-          : response.user?.role === "Admin"
-            ? "/admin"
-            : "/dashboard"
-      );
+      goToWorkspace(response.user);
     } catch (error_) {
-      setError(error_ instanceof Error ? error_.message : "Authentication failed");
+      setError(getApiErrorMessage(error_, "Authentication failed"));
     } finally {
       setLoading(false);
     }
   };
-  const title =
-    mode === "login" ? "Welcome back to UBOOK." : mode === "register" ? "Create your trusted travel identity." : mode === "forgot" ? "Reset your secure access." : "Verify your email.";
+
+  const title = requiresTwoFactor
+    ? "Confirm your secure login."
+    : mode === "login"
+      ? "Welcome back to UBOOK."
+      : mode === "register"
+        ? "Create your trusted travel identity."
+        : mode === "forgot"
+          ? "Reset your secure access."
+          : "Verify your email.";
+
   return (
     <MotionPage>
       <div className="grid min-h-screen bg-canvas lg:grid-cols-[0.9fr_1.1fr]">
@@ -970,39 +1078,63 @@ function AuthShell({ mode }: { mode: "login" | "register" | "forgot" | "verify" 
             <BrandMark />
             <h1 className="h2-type mt-8">{title}</h1>
             <p className="body-type mt-4">
-              {mode === "verify" ? "Enter the six digit code sent to your email to unlock trusted booking and host operations." : "Use Google, Apple, or email. The UI is optimized for verification, payments, and role-specific workspace access."}
+              {requiresTwoFactor
+                ? "Enter the code from your authenticator app, or use one of your recovery codes."
+                : mode === "verify"
+                  ? "Verify your email to unlock trusted booking and host operations."
+                  : "Use OAuth or email. UBOOK will send each user to the correct traveler, host, or admin workspace after authentication."}
             </p>
+
             <form onSubmit={submit} className="premium-card mt-8 grid gap-4 p-5">
-              {mode === "register" ? (
+              {requiresTwoFactor ? (
+                <div className="rounded-[1.5rem] border border-primary/20 bg-primary/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
+                    <div>
+                      <p className="text-sm font-black text-ink">Two-factor authentication</p>
+                      <p className="mt-1 text-sm leading-6 text-ink-soft">
+                        This extra step protects your bookings, payouts, messages, and admin access.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {mode === "register" && !requiresTwoFactor ? (
                 <label>
                   <span className="caption-type">Full name</span>
-                  <input className="input-control mt-2" name="fullName" required />
+                  <input className="input-control mt-2" name="fullName" autoComplete="name" required />
                 </label>
               ) : null}
-              {mode !== "verify" ? (
+
+              {!requiresTwoFactor && mode !== "verify" ? (
                 <label>
                   <span className="caption-type">Email</span>
                   <div className="relative mt-2">
                     <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                    <input className="input-control pl-11" name="email" type="email" required />
+                    <input className="input-control pl-11" name="email" type="email" autoComplete="email" required />
                   </div>
                 </label>
-              ) : (
+              ) : null}
+
+              {!requiresTwoFactor && mode === "verify" ? (
                 <label>
                   <span className="caption-type">Verification code</span>
-                  <input className="input-control mt-2 text-center text-xl tracking-[0.45em]" name="code" inputMode="numeric" />
+                  <input className="input-control mt-2 text-center text-xl tracking-[0.45em]" name="code" inputMode="numeric" autoComplete="one-time-code" />
                 </label>
-              )}
-              {mode === "login" || mode === "register" ? (
+              ) : null}
+
+              {!requiresTwoFactor && (mode === "login" || mode === "register") ? (
                 <label>
                   <span className="caption-type">Password</span>
                   <div className="relative mt-2">
                     <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                    <input className="input-control pl-11" name="password" type="password" required />
+                    <input className="input-control pl-11" name="password" type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} required />
                   </div>
                 </label>
               ) : null}
-              {mode === "register" ? (
+
+              {!requiresTwoFactor && mode === "register" ? (
                 <div>
                   <span className="caption-type">Workspace</span>
                   <div className="mt-2 grid grid-cols-2 gap-2">
@@ -1019,35 +1151,69 @@ function AuthShell({ mode }: { mode: "login" | "register" | "forgot" | "verify" 
                   </div>
                 </div>
               ) : null}
+
               {requiresTwoFactor ? (
-  <label>
-    <span className="caption-type">Authenticator code</span>
-    <input
-      className="input-control mt-2 text-center text-xl tracking-[0.35em]"
-      value={twoFactorCode}
-      onChange={(event) => setTwoFactorCode(event.target.value)}
-      inputMode="numeric"
-      maxLength={6}
-      required
-      autoFocus
-    />
-  </label>
-) : null}
+                <div className="grid gap-3">
+                  {!useRecoveryCode ? (
+                    <label>
+                      <span className="caption-type">Authenticator code</span>
+                      <input
+                        className="input-control mt-2 text-center text-xl tracking-[0.35em]"
+                        value={twoFactorCode}
+                        onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        required
+                        autoFocus
+                      />
+                    </label>
+                  ) : (
+                    <label>
+                      <span className="caption-type">Recovery code</span>
+                      <input
+                        className="input-control mt-2 font-mono"
+                        value={recoveryCode}
+                        onChange={(event) => setRecoveryCode(event.target.value)}
+                        autoComplete="one-time-code"
+                        required
+                        autoFocus
+                      />
+                    </label>
+                  )}
+
+                  <button
+                    type="button"
+                    className="text-left text-sm font-bold text-primary"
+                    onClick={() => {
+                      setUseRecoveryCode((value) => !value);
+                      setTwoFactorCode("");
+                      setRecoveryCode("");
+                      setError("");
+                    }}
+                  >
+                    {useRecoveryCode ? "Use authenticator code instead" : "Use a recovery code instead"}
+                  </button>
+                </div>
+              ) : null}
+
               {error ? <div className="rounded-2xl bg-error/10 p-3 text-sm font-semibold text-error">{error}</div> : null}
-<Button type="submit" disabled={loading}>
-  {loading
-    ? "Working..."
-    : requiresTwoFactor
-      ? "Verify code"
-      : mode === "forgot"
-        ? "Send reset link"
-        : mode === "verify"
-          ? "Verify email"
-          : mode === "register"
-            ? "Create account"
-            : "Log in"}
-</Button>
-              {mode === "login" || mode === "register" ? (
+
+              <Button type="submit" disabled={loading}>
+                {loading
+                  ? "Working..."
+                  : requiresTwoFactor
+                    ? "Verify and continue"
+                    : mode === "forgot"
+                      ? "Send reset link"
+                      : mode === "verify"
+                        ? "Verify email"
+                        : mode === "register"
+                          ? "Create account"
+                          : "Log in"}
+              </Button>
+
+              {!requiresTwoFactor && (mode === "login" || mode === "register") ? (
                 <>
                   <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.16em] text-muted">
                     <span className="h-px flex-1 bg-line" />
@@ -1055,19 +1221,38 @@ function AuthShell({ mode }: { mode: "login" | "register" | "forgot" | "verify" 
                     <span className="h-px flex-1 bg-line" />
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
-  <Button type="button" variant="secondary" onClick={() => startOAuthLogin("google", role)}>
-    Google
-  </Button>
+                    <Button type="button" variant="secondary" onClick={() => startOAuthLogin("google", role)}>
+                      Google
+                    </Button>
 
-  <Button type="button" variant="secondary" onClick={() => startOAuthLogin("microsoft", role)}>
-    Microsoft
-  </Button>
-</div>
+                    <Button type="button" variant="secondary" onClick={() => startOAuthLogin("microsoft", role)}>
+                      Microsoft
+                    </Button>
+                  </div>
                 </>
               ) : null}
+
               <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold">
-                {mode !== "login" ? <Link to="/login" className="text-primary">Back to login</Link> : <Link to="/forgot-password" className="text-primary">Forgot password?</Link>}
-                {mode !== "register" ? <Link to="/register" className="text-ink-soft">Create account</Link> : null}
+                {requiresTwoFactor ? (
+                  <button
+                    type="button"
+                    className="text-primary"
+                    onClick={() => {
+                      setRequiresTwoFactor(false);
+                      setTempToken("");
+                      setTwoFactorCode("");
+                      setRecoveryCode("");
+                      setError("");
+                    }}
+                  >
+                    Back to password login
+                  </button>
+                ) : mode !== "login" ? (
+                  <Link to="/login" className="text-primary">Back to login</Link>
+                ) : (
+                  <Link to="/forgot-password" className="text-primary">Forgot password?</Link>
+                )}
+                {!requiresTwoFactor && mode !== "register" ? <Link to="/register" className="text-ink-soft">Create account</Link> : null}
               </div>
             </form>
           </div>
