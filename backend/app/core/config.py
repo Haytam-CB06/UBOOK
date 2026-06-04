@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     public_assets_base_url: str | None = None
     secure_cookies: bool = False
     auth_cookie_domain: str | None = None
-    auth_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    auth_cookie_samesite: Literal["lax", "strict", "none"] = "none"
     max_upload_bytes: int = 5 * 1024 * 1024
     field_encryption_key: str | None = None
     password_reset_minutes: int = 30
