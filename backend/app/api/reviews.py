@@ -8,7 +8,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.security import now_utc
 from app.models import Booking, BookingStatus, HostReview, Property, Review, ReviewImage, Role, TravelerReview, User
-from app.schemas.platform import HostReviewCreate, PropertyReviewCreate, TravelerReviewCreate
+from app.schemas.platform import HostReviewCreate, PropertyReviewCreate, StayReviewCreate, TravelerReviewCreate
 from app.schemas.property import ReviewCreate
 from app.services.notification_service import create_notification
 from app.services.serialization import review_to_frontend
@@ -29,13 +29,114 @@ def _recalculate_rating(db: Session, property_id: int) -> None:
         property_.review_count = int(count or 0)
 
 
+@router.get("/me")
+def my_reviews(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    property_reviews = (
+        db.query(Review)
+        .filter(Review.user_id == user.id, Review.deleted_at.is_(None))
+        .order_by(Review.created_at.desc())
+        .all()
+    )
+    host_reviews = (
+        db.query(HostReview)
+        .filter(HostReview.host_id == user.id, HostReview.deleted_at.is_(None))
+        .order_by(HostReview.created_at.desc())
+        .all()
+    )
+    traveler_reviews = (
+        db.query(TravelerReview)
+        .filter(TravelerReview.traveler_id == user.id, TravelerReview.deleted_at.is_(None))
+        .order_by(TravelerReview.created_at.desc())
+        .all()
+    )
+    ratings = [review.rating for review in property_reviews] + [review.rating for review in host_reviews] + [review.rating for review in traveler_reviews]
+    return {
+        "reviews": [review_to_frontend(review) for review in property_reviews],
+        "hostReviews": [_host_review_payload(review) for review in host_reviews],
+        "travelerReviews": [_traveler_review_payload(review) for review in traveler_reviews],
+        "averageRating": round(sum(ratings) / len(ratings), 2) if ratings else 0,
+        "totalReviews": len(ratings),
+    }
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_review(payload: ReviewCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return create_property_review(PropertyReviewCreate(**payload.model_dump()), user, db)
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Apartment and host reviews must be submitted together")
+
+
+@router.post("/stay", status_code=status.HTTP_201_CREATED)
+def create_stay_review(payload: StayReviewCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    booking = db.get(Booking, payload.booking_id)
+    if (
+        not booking
+        or booking.property_id != payload.property_id
+        or booking.user_id != user.id
+        or booking.property.owner_id != payload.host_id
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only verified booking guests can review this stay")
+    if booking.status not in {BookingStatus.checked_out, BookingStatus.completed}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Booking must be completed before review")
+
+    existing_property_review = (
+        db.query(Review)
+        .filter(Review.booking_id == booking.id, Review.user_id == user.id, Review.deleted_at.is_(None))
+        .first()
+    )
+    existing_host_review = (
+        db.query(HostReview)
+        .filter(HostReview.booking_id == booking.id, HostReview.reviewer_id == user.id, HostReview.host_id == payload.host_id, HostReview.deleted_at.is_(None))
+        .first()
+    )
+    if existing_property_review or existing_host_review:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This stay already has a review")
+
+    property_review = Review(
+        property_id=payload.property_id,
+        booking_id=payload.booking_id,
+        user_id=user.id,
+        author_name=user.full_name,
+        role_label="Verified booking guest",
+        avatar_url=user.avatar_url or "",
+        rating=payload.apartment_rating,
+        comment=payload.apartment_comment,
+        verified_booking=True,
+    )
+    host_review = HostReview(
+        booking_id=booking.id,
+        reviewer_id=user.id,
+        host_id=payload.host_id,
+        rating=payload.host_rating,
+        comment=payload.host_comment,
+    )
+    db.add(property_review)
+    db.add(host_review)
+    db.flush()
+
+    for index, url in enumerate(payload.image_urls):
+        db.add(ReviewImage(review_id=property_review.id, url=url, sort_order=index))
+
+    _recalculate_rating(db, payload.property_id)
+    _recalculate_host_rating(db, payload.host_id)
+    if booking.property.owner:
+        create_notification(
+            db,
+            notification_type="review_received",
+            subject=f"New review for {booking.property.title or booking.property.name}",
+            body=f"Apartment: {payload.apartment_comment}\nHost: {payload.host_comment}",
+            user=booking.property.owner,
+        )
+    db.commit()
+    db.refresh(property_review)
+    db.refresh(host_review)
+    return {
+        "propertyReview": review_to_frontend(property_review),
+        "hostReview": _host_review_payload(host_review),
+    }
 
 
 @router.post("/property", status_code=status.HTTP_201_CREATED)
 def create_property_review(payload: PropertyReviewCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Apartment and host reviews must be submitted together")
     booking = db.get(Booking, payload.booking_id)
     if not booking or booking.property_id != payload.property_id or booking.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only verified booking guests can review this stay")
@@ -75,6 +176,7 @@ def create_property_review(payload: PropertyReviewCreate, user: User = Depends(g
 
 @router.post("/host", status_code=status.HTTP_201_CREATED)
 def create_host_review(payload: HostReviewCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Apartment and host reviews must be submitted together")
     booking = db.get(Booking, payload.booking_id)
     if not booking or booking.user_id != user.id or booking.property.owner_id != payload.host_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the booking traveler can review the host")

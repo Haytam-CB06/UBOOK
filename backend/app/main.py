@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import admin, auth, bookings, favorites, health, host, messaging, notifications, operations, payments, profiles, properties, reviews, saved_searches, traveler, uploads, wishlists
+from app.api import admin, auth, bookings, favorites, health, host, messaging, notifications, operations, payments, profiles, properties, reviews, saved_searches, travel_finder, traveler, uploads, wishlists
 from app.core.cache import cache
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
@@ -54,16 +54,17 @@ def create_app() -> FastAPI:
         if request.url.path not in {"/health", f"{settings.api_prefix}/health"}:
             content_length = request.headers.get("content-length")
             if content_length and int(content_length) > max(settings.max_upload_bytes, 1024 * 1024):
-                return JSONResponse(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, content={"detail": "Request body too large"})
+                return _json_error(request, status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, {"detail": "Request body too large"})
             allowed, limit, window = check_rate_limit(request)
             if not allowed:
-                return JSONResponse(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    content={"detail": "Rate limit exceeded", "limit": limit, "windowSeconds": window, "correlationId": correlation_id},
+                return _json_error(
+                    request,
+                    status.HTTP_429_TOO_MANY_REQUESTS,
+                    {"detail": "Rate limit exceeded", "limit": limit, "windowSeconds": window, "correlationId": correlation_id},
                 )
             csrf_error = _csrf_error(request)
             if csrf_error:
-                return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": csrf_error, "correlationId": correlation_id})
+                return _json_error(request, status.HTTP_403_FORBIDDEN, {"detail": csrf_error, "correlationId": correlation_id})
         response: Response = await call_next(request)
         response.headers["X-Correlation-ID"] = correlation_id
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix=settings.api_prefix)
     app.include_router(properties.router, prefix=settings.api_prefix)
     app.include_router(bookings.router, prefix=settings.api_prefix)
+    app.include_router(bookings.reservation_router, prefix=settings.api_prefix)
     app.include_router(reviews.router, prefix=settings.api_prefix)
     app.include_router(favorites.router, prefix=settings.api_prefix)
     app.include_router(wishlists.router, prefix=settings.api_prefix)
@@ -91,6 +93,7 @@ def create_app() -> FastAPI:
     app.include_router(messaging.router, prefix=settings.api_prefix)
     app.include_router(admin.router, prefix=settings.api_prefix)
     app.include_router(saved_searches.router, prefix=settings.api_prefix)
+    app.include_router(travel_finder.router, prefix=settings.api_prefix)
     app.include_router(operations.router, prefix=settings.api_prefix)
     app.include_router(uploads.router, prefix=settings.api_prefix)
     if settings.storage_provider == "local":
@@ -127,3 +130,13 @@ def _csrf_error(request: Request) -> str | None:
     if not cookie_token or not header_token or not secrets.compare_digest(cookie_token, header_token):
         return "CSRF token validation failed"
     return None
+
+
+def _json_error(request: Request, status_code: int, content: dict) -> JSONResponse:
+    response = JSONResponse(status_code=status_code, content=content)
+    origin = (request.headers.get("origin") or "").rstrip("/")
+    if origin and origin in settings.cors_origin_list:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response

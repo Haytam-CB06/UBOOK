@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.security import now_utc
 from app.models import Favorite, FavoriteType, Property, User
 from app.services.serialization import property_to_frontend
 
@@ -25,10 +26,13 @@ def add_favorite(favorite_type: FavoriteType, target_id: int, user: User = Depen
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
     existing = (
         db.query(Favorite)
-        .filter(Favorite.user_id == user.id, Favorite.favorite_type == favorite_type, Favorite.target_id == target_id, Favorite.deleted_at.is_(None))
+        .filter(Favorite.user_id == user.id, Favorite.favorite_type == favorite_type, Favorite.target_id == target_id)
         .first()
     )
     if existing:
+        if existing.deleted_at is not None:
+            existing.deleted_at = None
+            db.commit()
         return {"ok": True}
     db.add(Favorite(user_id=user.id, favorite_type=favorite_type, target_id=target_id))
     db.commit()
@@ -44,8 +48,6 @@ def remove_favorite(favorite_type: FavoriteType, target_id: int, user: User = De
     )
     if not favorite:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Favorite not found")
-    from app.core.security import now_utc
-
     favorite.deleted_at = now_utc()
     db.commit()
 

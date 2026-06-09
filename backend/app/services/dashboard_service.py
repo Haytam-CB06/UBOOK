@@ -149,7 +149,7 @@ def _host_occupancy_rate(properties: list[Property], bookings: list[Booking]) ->
     total_capacity = sum(max(property_.max_guests or property_.capacity, 1) for property_ in properties)
     if not total_capacity:
         return 0
-    booked_guest_nights = sum(booking.guests * max((booking.check_out - booking.check_in).days, 1) for booking in bookings if booking.status in {BookingStatus.confirmed, BookingStatus.checked_in, BookingStatus.checked_out, BookingStatus.completed})
+    booked_guest_nights = sum(booking.traveler_count * max((booking.check_out - booking.check_in).days, 1) for booking in bookings if booking.status in {BookingStatus.confirmed, BookingStatus.checked_in, BookingStatus.checked_out, BookingStatus.completed})
     available_guest_nights = total_capacity * 30
     return min(100, round((booked_guest_nights / available_guest_nights) * 100)) if available_guest_nights else 0
 

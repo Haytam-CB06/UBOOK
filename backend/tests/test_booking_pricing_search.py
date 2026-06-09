@@ -26,6 +26,8 @@ def test_search_property_pricing_and_availability(client):
 
 
 def test_booking_prevents_double_booking_when_inventory_exhausted(client):
+    guest_headers = auth_headers(client, "guest@ubook.ma", "GuestPass123!")
+    owner_headers = auth_headers(client, "owner@ubook.ma", "OwnerPass123!")
     payload = {
         "propertyId": 2,
         "fullName": "Amina El Mansouri",
@@ -34,12 +36,61 @@ def test_booking_prevents_double_booking_when_inventory_exhausted(client):
         "checkIn": "2026-07-01",
         "checkOut": "2026-07-05",
     }
-    first = client.post("/api/bookings", json=payload)
+    first = client.post("/api/bookings", json=payload, headers=guest_headers)
     assert first.status_code == 201, first.text
     assert first.json()["status"] == "Pending"
+    accepted = client.patch(f"/api/host/reservations/{first.json()['id']}/confirm", headers=owner_headers)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["statusRaw"] == "confirmed"
 
-    second = client.post("/api/bookings", json=payload)
+    second = client.post("/api/bookings", json=payload, headers=guest_headers)
     assert second.status_code == 409
+
+
+def test_host_acceptance_blocks_only_that_property_calendar(client):
+    guest_headers = auth_headers(client, "guest@ubook.ma", "GuestPass123!")
+    owner_headers = auth_headers(client, "owner@ubook.ma", "OwnerPass123!")
+    payload = {
+        "propertyId": 2,
+        "fullName": "Amina El Mansouri",
+        "email": "guest@ubook.ma",
+        "guests": 8,
+        "checkIn": "2026-07-10",
+        "checkOut": "2026-07-13",
+    }
+    created = client.post("/api/reservations", json=payload, headers=guest_headers)
+    assert created.status_code == 201, created.text
+    assert created.json()["statusRaw"] == "pending"
+
+    host_reservations = client.get("/api/host/reservations", headers=owner_headers)
+    assert host_reservations.status_code == 200, host_reservations.text
+    assert any(item["id"] == created.json()["id"] for item in host_reservations.json())
+
+    before_accept = client.get(
+        "/api/properties/2/reservations/calendar",
+        params={"start": "2026-07-10", "end": "2026-07-12"},
+    )
+    assert before_accept.status_code == 200, before_accept.text
+    assert before_accept.json()[0]["available"] is True
+
+    accepted = client.patch(f"/api/host/reservations/{created.json()['id']}/confirm", headers=owner_headers)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["statusRaw"] == "confirmed"
+
+    calendar = client.get(
+        "/api/properties/2/reservations/calendar",
+        params={"start": "2026-07-10", "end": "2026-07-12"},
+    )
+    assert calendar.status_code == 200, calendar.text
+    assert calendar.json()[0]["available"] is False
+    assert calendar.json()[0]["status"] == "reserved"
+
+    availability = client.get(
+        "/api/properties/2/availability",
+        params={"check_in": "2026-07-10", "check_out": "2026-07-13", "guests": 8},
+    )
+    assert availability.status_code == 200, availability.text
+    assert availability.json()["available"] is False
 
 
 def test_booking_state_machine_and_admin_stats(client):

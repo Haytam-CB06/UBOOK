@@ -5,7 +5,7 @@ from io import BytesIO
 from pathlib import Path
 
 from fastapi import UploadFile
-from PIL import Image
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.core.config import settings
 
@@ -72,28 +72,58 @@ class S3Storage:
 
 
 def _optimized_image_bytes(file: UploadFile) -> bytes:
-    raw = file.file.read()
-    if len(raw) > settings.max_upload_bytes:
-        raise ValueError("Images must be 5MB or smaller")
-    content_type = (file.content_type or "").lower()
-    suffix = Path(file.filename or "").suffix.lower()
-    if content_type not in {"image/jpeg", "image/png", "image/webp"} or suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
-        raise ValueError("Only JPG, PNG, and WEBP images are supported")
     try:
-        image = Image.open(BytesIO(raw))
-        image.verify()
-        image = Image.open(BytesIO(raw))
+        file.file.seek(0)
+    except Exception:
+        pass
+    raw = file.file.read()
+    raw_limit = max(settings.max_upload_bytes * 4, 20 * 1024 * 1024)
+    if not raw:
+        raise ValueError("Upload a valid image file")
+    if len(raw) > raw_limit:
+        raise ValueError("Images must be 20MB or smaller before optimization")
+    try:
+        with Image.open(BytesIO(raw)) as probe:
+            probe.verify()
+        with Image.open(BytesIO(raw)) as source:
+            if source.width < 1 or source.height < 1:
+                raise ValueError("Upload a valid image file")
+            if source.width > 12000 or source.height > 12000 or (source.width * source.height) > 80_000_000:
+                raise ValueError("Image dimensions are too large")
+            image = ImageOps.exif_transpose(source)
+            image.load()
+    except ValueError:
+        raise
+    except (UnidentifiedImageError, OSError) as exc:
+        raise ValueError("Upload a valid image file") from exc
     except Exception as exc:
-        raise ValueError("Invalid image file") from exc
-    if image.width < 320 or image.height < 240:
-        raise ValueError("Image dimensions are too small")
-    if image.width > 9000 or image.height > 9000:
+        raise ValueError("Could not process this image") from exc
+
+    if image.width > 12000 or image.height > 12000:
         raise ValueError("Image dimensions are too large")
-    image = image.convert("RGB")
-    image.thumbnail((1800, 1800))
+
+    image.thumbnail((1800, 1800), Image.LANCZOS)
+    if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
+        image = image.convert("RGBA")
+        background = Image.new("RGB", image.size, (255, 255, 255))
+        background.paste(image, mask=image.getchannel("A"))
+        image = background
+    else:
+        image = image.convert("RGB")
+
     output = BytesIO()
-    image.save(output, format="JPEG", optimize=True, quality=85)
-    return output.getvalue()
+    image.save(output, format="JPEG", optimize=True, quality=86, progressive=True)
+    data = output.getvalue()
+    if len(data) <= settings.max_upload_bytes:
+        return data
+
+    for quality in (80, 74, 68):
+        output = BytesIO()
+        image.save(output, format="JPEG", optimize=True, quality=quality, progressive=True)
+        data = output.getvalue()
+        if len(data) <= settings.max_upload_bytes:
+            return data
+    raise ValueError("Images must be 5MB or smaller after optimization")
 
 
 def _storage_provider():

@@ -6,14 +6,28 @@ import {
   BookingPage,
   EmailVerificationPage,
   ForgotPasswordPage,
+  HostAnalyticsPage,
+  HostCalendarPage,
   HostDashboard,
+  HostEarningsPage,
+  HostListingsPage,
   HostOnboarding,
+  HostProfilePage,
+  HostReservationsPage,
+  HostReviewsPage,
+  HostSettingsPage,
   LandingPage,
   LoginPage,
   MessagesPage,
+  MyReservationsPage,
   PropertyDetails,
   RegisterPage,
   SearchResults,
+  TravelerPaymentsPage,
+  TravelerProfilePage,
+  TravelerReviewsPage,
+  TravelerSettingsPage,
+  TravelerWishlistPage,
   UserDashboard
 } from "../experience/pages";
 import { ProtectedRoute } from "./ProtectedRoute";
@@ -30,8 +44,22 @@ export function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/verify-email" element={<EmailVerificationPage />} />
         <Route path="/dashboard" element={<ProtectedRoute roles={["Traveler"]}><UserDashboard /></ProtectedRoute>} />
+        <Route path="/dashboard/wishlist" element={<ProtectedRoute roles={["Traveler"]}><TravelerWishlistPage /></ProtectedRoute>} />
+        <Route path="/dashboard/payments" element={<ProtectedRoute roles={["Traveler"]}><TravelerPaymentsPage /></ProtectedRoute>} />
+        <Route path="/dashboard/reviews" element={<ProtectedRoute roles={["Traveler"]}><TravelerReviewsPage /></ProtectedRoute>} />
+        <Route path="/dashboard/profile" element={<ProtectedRoute roles={["Traveler"]}><TravelerProfilePage /></ProtectedRoute>} />
+        <Route path="/dashboard/settings" element={<ProtectedRoute roles={["Traveler"]}><TravelerSettingsPage /></ProtectedRoute>} />
+        <Route path="/reservations" element={<ProtectedRoute roles={["Traveler"]}><MyReservationsPage /></ProtectedRoute>} />
         <Route path="/host" element={<ProtectedRoute roles={["Host"]}><HostDashboard /></ProtectedRoute>} />
+        <Route path="/host/listings" element={<ProtectedRoute roles={["Host"]}><HostListingsPage /></ProtectedRoute>} />
+        <Route path="/host/reservations" element={<ProtectedRoute roles={["Host"]}><HostReservationsPage /></ProtectedRoute>} />
+        <Route path="/host/calendar" element={<ProtectedRoute roles={["Host"]}><HostCalendarPage /></ProtectedRoute>} />
+        <Route path="/host/earnings" element={<ProtectedRoute roles={["Host"]}><HostEarningsPage /></ProtectedRoute>} />
+        <Route path="/host/reviews" element={<ProtectedRoute roles={["Host"]}><HostReviewsPage /></ProtectedRoute>} />
+        <Route path="/host/analytics" element={<ProtectedRoute roles={["Host"]}><HostAnalyticsPage /></ProtectedRoute>} />
+        <Route path="/host/settings" element={<ProtectedRoute roles={["Host"]}><HostSettingsPage /></ProtectedRoute>} />
         <Route path="/host/onboarding" element={<ProtectedRoute roles={["Host"]}><HostOnboarding /></ProtectedRoute>} />
+        <Route path="/hosts/:id" element={<HostProfilePage />} />
         <Route path="/admin" element={<ProtectedRoute roles={["Admin"]}><AdminDashboard /></ProtectedRoute>} />
         <Route path="/messages" element={<ProtectedRoute roles={["Traveler", "Host", "Admin"]}><MessagesPage /></ProtectedRoute>} />
         <Route path="/search" element={<SearchResults />} />

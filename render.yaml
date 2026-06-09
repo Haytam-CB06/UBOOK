@@ -26,6 +26,9 @@ services:
       - key: UBOOK_REFRESH_SECRET_KEY
         generateValue: true
 
+      - key: UBOOK_REFRESH_TOKEN_DAYS
+        value: 7
+
       - key: UBOOK_FIELD_ENCRYPTION_KEY
         generateValue: true
 
@@ -51,7 +54,7 @@ services:
         value: false
 
       - key: UBOOK_STORAGE_PROVIDER
-        value: local
+        value: cloudinary
 
       - key: UBOOK_LOCAL_UPLOAD_DIR
         value: uploads
@@ -90,6 +93,9 @@ services:
 
       - key: VITE_REQUIRE_AUTH
         value: true
+
+      - key: VITE_AUTH_SESSION_STORAGE
+        value: local
 
     routes:
       - type: rewrite

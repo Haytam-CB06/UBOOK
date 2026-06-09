@@ -17,6 +17,8 @@ def test_register_login_refresh_me_logout(client):
     tokens = register.json()
     assert tokens["accessToken"]
     assert tokens["user"]["name"] == "New Guest"
+    assert tokens["user"]["otpEnabled"] is False
+    assert tokens["user"]["securitySetupRequired"] is True
 
     login = client.post("/api/auth/login", json={"email": "new@ubook.ma", "password": "StrongPass123!"})
     assert login.status_code == 200
@@ -26,6 +28,7 @@ def test_register_login_refresh_me_logout(client):
     me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {refresh.json()['accessToken']}"})
     assert me.status_code == 200
     assert me.json()["email"] == "new@ubook.ma"
+    assert me.json()["securitySetupRequired"] is True
 
     logout = client.post("/api/auth/logout", headers={"Authorization": f"Bearer {refresh.json()['accessToken']}"})
     assert logout.status_code == 200
@@ -41,6 +44,10 @@ def test_2fa_setup_login_validate_and_disable(client):
     verify = client.post("/api/auth/2fa/verify-setup", json={"code": code}, headers=headers)
     assert verify.status_code == 200, verify.text
     assert len(verify.json()["recoveryCodes"]) == 10
+    enabled_profile = client.get("/api/auth/me", headers=headers)
+    assert enabled_profile.status_code == 200
+    assert enabled_profile.json()["otpEnabled"] is True
+    assert enabled_profile.json()["securitySetupRequired"] is False
 
     login = client.post("/api/auth/login", json={"email": "guest@ubook.ma", "password": "GuestPass123!"})
     assert login.status_code == 200
@@ -65,6 +72,10 @@ def test_2fa_setup_login_validate_and_disable(client):
         db.close()
     disabled = client.post("/api/auth/2fa/disable", json={"password": "GuestPass123!", "code": code}, headers=disable_headers)
     assert disabled.status_code == 200, disabled.text
+    disabled_profile = client.get("/api/auth/me", headers=disable_headers)
+    assert disabled_profile.status_code == 200
+    assert disabled_profile.json()["otpEnabled"] is False
+    assert disabled_profile.json()["securitySetupRequired"] is True
 
 
 def test_2fa_rate_limit(client):
@@ -76,3 +87,16 @@ def test_2fa_rate_limit(client):
     for _ in range(5):
         assert client.post("/api/auth/2fa/validate", json={"tempToken": login.json()["tempToken"], "code": "000000"}).status_code == 401
     assert client.post("/api/auth/2fa/validate", json={"tempToken": login.json()["tempToken"], "code": "000000"}).status_code == 429
+
+
+def test_rate_limited_login_keeps_cors_headers(client):
+    headers = {"Origin": "http://localhost:5173"}
+    payload = {"email": "guest@ubook.ma", "password": "wrong-password"}
+    response = None
+    for _ in range(6):
+        response = client.post("/api/auth/login", json=payload, headers=headers)
+
+    assert response is not None
+    assert response.status_code == 429
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert response.headers["access-control-allow-credentials"] == "true"

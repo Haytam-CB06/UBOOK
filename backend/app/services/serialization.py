@@ -24,6 +24,7 @@ def review_to_frontend(review: Review) -> dict:
         "avatar": review.avatar_url,
         "rating": review.rating,
         "comment": review.comment,
+        "createdAt": review.created_at.isoformat(),
     }
 
 
@@ -115,6 +116,7 @@ def property_to_frontend(property_: Property) -> dict:
 
 def booking_to_frontend(booking: Booking) -> dict:
     nights = (booking.check_out - booking.check_in).days
+    guest = booking.user
     return {
         "id": booking.id,
         "bookingId": booking.booking_reference,
@@ -125,19 +127,28 @@ def booking_to_frontend(booking: Booking) -> dict:
         "propertyImage": booking.property.image_url,
         "hostId": booking.property.owner_id,
         "hostName": booking.property.owner.full_name if booking.property.owner else booking.property.host_name,
+        "guestId": booking.user_id,
+        "guestName": guest.full_name if guest else booking.full_name,
+        "guestEmail": guest.email if guest else booking.email,
         "city": booking.property.city,
+        "checkIn": booking.check_in.isoformat(),
+        "checkOut": booking.check_out.isoformat(),
         "dates": f"{booking.check_in.strftime('%d %b')} - {booking.check_out.strftime('%d %b')}",
         "nights": nights,
         "status": booking.status.value.replace("_", "-").title(),
+        "statusRaw": booking.status.value,
         "total": float(booking.total_amount),
+        "createdAt": booking.created_at.isoformat(),
+        "updatedAt": booking.updated_at.isoformat(),
+        "specialRequests": booking.special_requests,
         "payload": {
             "propertyId": booking.property_id,
             "fullName": booking.full_name,
             "email": booking.email,
-            "guests": booking.guests,
+            "guests": booking.traveler_count,
             "checkIn": booking.check_in.isoformat(),
             "checkOut": booking.check_out.isoformat(),
-            "notes": booking.notes,
+            "notes": booking.special_requests,
         },
     }
 

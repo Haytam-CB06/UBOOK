@@ -6,11 +6,30 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_roles
 from app.core.database import get_db
 from app.core.security import now_utc
-from app.models import HostProfile, Property, Role, User
+from app.models import Booking, BookingStatus, HostProfile, Property, Role, User
+from app.services.booking_service import transition_booking
 from app.services.dashboard_service import host_dashboard
-from app.services.serialization import property_to_frontend
+from app.services.notification_service import booking_confirmation
+from app.services.serialization import booking_to_frontend, property_to_frontend
 
 router = APIRouter(prefix="/host", tags=["host"])
+
+
+def _host_reservations_query(db: Session, user: User):
+    query = db.query(Booking).join(Booking.property).filter(Booking.deleted_at.is_(None), Property.deleted_at.is_(None))
+    if user.role == Role.hotel_admin:
+        query = query.filter(Property.owner_id == user.id)
+    return query
+
+
+def _host_reservation(db: Session, booking_id: int, user: User, *, lock: bool = False) -> Booking:
+    query = _host_reservations_query(db, user).filter(Booking.id == booking_id)
+    if lock:
+        query = query.with_for_update()
+    booking = query.first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    return booking
 
 
 @router.get("/onboarding")
@@ -63,31 +82,56 @@ def my_properties(user: User = Depends(require_roles(Role.hotel_admin, Role.admi
     return [property_to_frontend(property_) for property_ in query.all()]
 
 
+@router.get("/reservations")
+def host_reservations(user: User = Depends(require_roles(Role.hotel_admin, Role.admin, Role.super_admin)), db: Session = Depends(get_db)):
+    bookings = _host_reservations_query(db, user).order_by(Booking.created_at.desc()).all()
+    return [booking_to_frontend(booking) for booking in bookings]
+
+
+@router.patch("/reservations/{booking_id}/confirm")
+def confirm_reservation(booking_id: int, user: User = Depends(require_roles(Role.hotel_admin, Role.admin, Role.super_admin)), db: Session = Depends(get_db)):
+    booking = _host_reservation(db, booking_id, user, lock=True)
+    was_pending = booking.status == BookingStatus.pending
+    transition_booking(db, booking=booking, to_status=BookingStatus.confirmed, actor=user, reason="host_confirm")
+    if was_pending:
+        booking_confirmation(db, email=booking.email, booking_reference=booking.booking_reference)
+    db.commit()
+    db.refresh(booking)
+    return booking_to_frontend(booking)
+
+
+@router.patch("/reservations/{booking_id}/cancel")
+def cancel_reservation(booking_id: int, user: User = Depends(require_roles(Role.hotel_admin, Role.admin, Role.super_admin)), db: Session = Depends(get_db)):
+    booking = _host_reservation(db, booking_id, user, lock=True)
+    transition_booking(db, booking=booking, to_status=BookingStatus.cancelled, actor=user, reason="host_cancel")
+    db.commit()
+    db.refresh(booking)
+    return booking_to_frontend(booking)
+
+
+@router.patch("/reservations/{booking_id}/complete")
+def complete_reservation(booking_id: int, user: User = Depends(require_roles(Role.hotel_admin, Role.admin, Role.super_admin)), db: Session = Depends(get_db)):
+    booking = _host_reservation(db, booking_id, user, lock=True)
+    transition_booking(db, booking=booking, to_status=BookingStatus.completed, actor=user, reason="host_complete")
+    db.commit()
+    db.refresh(booking)
+    return booking_to_frontend(booking)
+
+
 @router.post("/bookings/{booking_id}/accept")
 def accept_booking(booking_id: int, user: User = Depends(require_roles(Role.hotel_admin, Role.admin, Role.super_admin)), db: Session = Depends(get_db)):
-    from app.models import Booking, BookingStatus
-    from app.services.booking_service import transition_booking
-
-    booking = db.get(Booking, booking_id)
-    if not booking or booking.deleted_at:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    if user.role == Role.hotel_admin and booking.property.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="Cannot manage another host's booking")
+    booking = _host_reservation(db, booking_id, user, lock=True)
+    was_pending = booking.status == BookingStatus.pending
     transition_booking(db, booking=booking, to_status=BookingStatus.confirmed, actor=user, reason="host_accept")
+    if was_pending:
+        booking_confirmation(db, email=booking.email, booking_reference=booking.booking_reference)
     db.commit()
     return {"ok": True}
 
 
 @router.post("/bookings/{booking_id}/reject")
 def reject_booking(booking_id: int, user: User = Depends(require_roles(Role.hotel_admin, Role.admin, Role.super_admin)), db: Session = Depends(get_db)):
-    from app.models import Booking, BookingStatus
-    from app.services.booking_service import transition_booking
-
-    booking = db.get(Booking, booking_id)
-    if not booking or booking.deleted_at:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    if user.role == Role.hotel_admin and booking.property.owner_id != user.id:
-        raise HTTPException(status_code=403, detail="Cannot manage another host's booking")
+    booking = _host_reservation(db, booking_id, user, lock=True)
     transition_booking(db, booking=booking, to_status=BookingStatus.rejected, actor=user, reason="host_reject")
     db.commit()
     return {"ok": True}

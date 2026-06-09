@@ -106,6 +106,28 @@ class HostReviewCreate(CamelInputModel):
     comment: str = Field(min_length=3)
 
 
+class StayReviewCreate(CamelInputModel):
+    field_aliases = {
+        "propertyId": "property_id",
+        "bookingId": "booking_id",
+        "hostId": "host_id",
+        "apartmentRating": "apartment_rating",
+        "apartmentComment": "apartment_comment",
+        "hostRating": "host_rating",
+        "hostComment": "host_comment",
+        "imageUrls": "image_urls",
+    }
+
+    property_id: int
+    booking_id: int
+    host_id: int
+    apartment_rating: int = Field(ge=1, le=5)
+    apartment_comment: str = Field(min_length=3)
+    host_rating: int = Field(ge=1, le=5)
+    host_comment: str = Field(min_length=3)
+    image_urls: list[str] = Field(default_factory=list)
+
+
 class TravelerReviewCreate(CamelInputModel):
     field_aliases = {"bookingId": "booking_id", "travelerId": "traveler_id"}
 

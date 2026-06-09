@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     mongodb_url: str = "mongodb://localhost:27017"
     mongodb_database: str = "ubook_pricing"
 
-    cors_origins: str = "http://localhost:5173/,http://localhost:3000,http://127.0.0.1:5173,https://ubook-f.onrender.com,https://ubook-f.onrender.com/"
-    frontend_url: str = "http://localhost:5173/,https://ubook-f.onrender.com/,https://ubook-f.onrender.com"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://ubook-f.onrender.com,https://ubook-front.onrender.com"
+    frontend_url: str = "http://localhost:5173"
     auto_create_tables: bool = False
     auto_seed: bool = False
     rate_limit_requests: int = 120
@@ -40,9 +40,9 @@ class Settings(BaseSettings):
     aws_region: str = "us-east-1"
     s3_bucket: str | None = None
     public_assets_base_url: str | None = None
-    secure_cookies: bool = False
+    secure_cookies: bool = True
     auth_cookie_domain: str | None = None
-    auth_cookie_samesite: Literal["lax", "strict", "none"] = "none"
+    auth_cookie_samesite: Literal["lax", "strict", "none"] = "strict"
     max_upload_bytes: int = 5 * 1024 * 1024
     field_encryption_key: str | None = None
     password_reset_minutes: int = 30
@@ -87,11 +87,19 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        return [origin.strip().rstrip("/") for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def oauth_javascript_origin_list(self) -> list[str]:
         return [origin.strip().rstrip("/") for origin in self.oauth_javascript_origins.split(",") if origin.strip()]
+
+    @property
+    def frontend_url_list(self) -> list[str]:
+        return [origin.strip().rstrip("/") for origin in self.frontend_url.split(",") if origin.strip()]
+
+    @property
+    def primary_frontend_url(self) -> str:
+        return self.frontend_url_list[0] if self.frontend_url_list else "http://localhost:5173"
 
     @property
     def is_test(self) -> bool:

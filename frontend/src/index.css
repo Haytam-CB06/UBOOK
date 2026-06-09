@@ -4,19 +4,19 @@
 
 :root {
   color-scheme: light;
-  --canvas: 39 36% 97%;
+  --canvas: 210 40% 98%;
   --surface: 0 0% 100%;
-  --surface-2: 38 33% 94%;
-  --surface-3: 36 24% 90%;
-  --ink: 220 33% 9%;
-  --ink-soft: 222 13% 38%;
-  --muted: 220 10% 54%;
-  --line: 34 18% 84%;
-  --primary: 12 83% 54%;
+  --surface-2: 214 42% 96%;
+  --surface-3: 212 34% 91%;
+  --ink: 222 47% 11%;
+  --ink-soft: 222 18% 38%;
+  --muted: 215 13% 52%;
+  --line: 214 28% 86%;
+  --primary: 217 91% 55%;
   --primary-ink: 0 0% 100%;
-  --secondary: 216 35% 16%;
+  --secondary: 222 47% 11%;
   --secondary-ink: 0 0% 100%;
-  --accent: 171 52% 38%;
+  --accent: 190 88% 42%;
   --success: 145 61% 38%;
   --warning: 36 89% 52%;
   --error: 356 70% 54%;
@@ -24,25 +24,25 @@
   --radius-md: 1rem;
   --radius-lg: 1.5rem;
   --radius-xl: 2rem;
-  --shadow-soft: 0 22px 60px rgb(25 20 13 / 0.08);
-  --shadow-lift: 0 28px 70px rgb(25 20 13 / 0.16);
+  --shadow-soft: 0 22px 60px rgb(15 23 42 / 0.08);
+  --shadow-lift: 0 28px 70px rgb(15 23 42 / 0.16);
 }
 
 .dark {
   color-scheme: dark;
-  --canvas: 220 24% 7%;
-  --surface: 220 21% 10%;
-  --surface-2: 219 19% 14%;
-  --surface-3: 219 16% 19%;
-  --ink: 42 34% 94%;
-  --ink-soft: 38 16% 73%;
-  --muted: 220 10% 61%;
-  --line: 218 14% 23%;
-  --primary: 14 83% 58%;
+  --canvas: 222 47% 7%;
+  --surface: 222 41% 10%;
+  --surface-2: 221 36% 15%;
+  --surface-3: 218 28% 21%;
+  --ink: 210 40% 96%;
+  --ink-soft: 214 22% 76%;
+  --muted: 215 14% 64%;
+  --line: 218 24% 24%;
+  --primary: 213 94% 68%;
   --primary-ink: 0 0% 100%;
-  --secondary: 37 28% 88%;
-  --secondary-ink: 220 33% 9%;
-  --accent: 171 49% 48%;
+  --secondary: 210 40% 96%;
+  --secondary-ink: 222 47% 11%;
+  --accent: 188 86% 55%;
   --success: 145 56% 48%;
   --warning: 39 89% 58%;
   --error: 356 72% 61%;

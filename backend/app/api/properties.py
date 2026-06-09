@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import get_current_user, get_optional_user, require_roles
 from app.core.cache import cache
 from app.core.database import get_db
-from app.models import Amenity, AvailabilityCalendar, Hotel, Property, PropertyImage, PropertyKind, Role, Room, User
+from app.models import Amenity, AvailabilityCalendar, Booking, Hotel, Property, PropertyImage, PropertyKind, Role, Room, User
 from app.schemas.platform import CalendarBulkUpdate, PropertyImageCreate, PropertyImageReorder
 from app.schemas.property import AvailabilityRequest, HotelCreate, PricingRequest, PropertyCreate, RoomCreate
-from app.services.availability_service import availability_payload, find_available_room
+from app.services.availability_service import BLOCKING_STATUSES, HOST_CALENDAR_STATUSES, availability_payload, ensure_bookable_rooms, find_available_room
 from app.services.pricing_service import calculate_price
 from app.services.serialization import property_to_frontend
 
@@ -83,6 +83,120 @@ def _sync_property_images(db: Session, property_: Property, image_urls: list[str
                 is_cover=index == 0,
             )
         )
+
+
+def _dates_between(start: date, end: date) -> list[date]:
+    cursor = start
+    values: list[date] = []
+    while cursor <= end:
+        values.append(cursor)
+        cursor += timedelta(days=1)
+    return values
+
+
+def _can_manage_property(user: User | None, property_: Property) -> bool:
+    if not user:
+        return False
+    if user.role in {Role.admin, Role.super_admin}:
+        return True
+    return user.role == Role.hotel_admin and property_.owner_id == user.id
+
+
+def _public_reservation_calendar(db: Session, property_: Property, start: date, end: date, user: User | None) -> list[dict]:
+    active_rooms = ensure_bookable_rooms(db, property_)
+    total_units = sum(room.inventory_count for room in active_rooms)
+    room_capacity = {room.id: room.inventory_count for room in active_rooms}
+    calendar_rows = (
+        db.query(AvailabilityCalendar)
+        .filter(
+            AvailabilityCalendar.property_id == property_.id,
+            AvailabilityCalendar.deleted_at.is_(None),
+            AvailabilityCalendar.calendar_date >= start,
+            AvailabilityCalendar.calendar_date <= end,
+        )
+        .all()
+    )
+    rows_by_date: dict[date, list[AvailabilityCalendar]] = {}
+    for row in calendar_rows:
+        rows_by_date.setdefault(row.calendar_date, []).append(row)
+
+    can_manage = _can_manage_property(user, property_)
+    calendar_statuses = HOST_CALENDAR_STATUSES if can_manage else BLOCKING_STATUSES
+    reservations = (
+        db.query(Booking)
+        .filter(
+            Booking.property_id == property_.id,
+            Booking.deleted_at.is_(None),
+            Booking.status.in_(calendar_statuses),
+            Booking.check_in < end + timedelta(days=1),
+            Booking.check_out > start,
+        )
+        .order_by(Booking.check_in.asc())
+        .all()
+    )
+    today = date.today()
+    days: list[dict] = []
+
+    for day in _dates_between(start, end):
+        rows = rows_by_date.get(day, [])
+        closed = any(row.closed for row in rows)
+        room_rows = [row for row in rows if row.room_id is not None]
+        global_rows = [row for row in rows if row.room_id is None]
+        configured_units = total_units
+        if room_rows:
+            configured_units = sum(0 if row.closed else row.available_units for row in room_rows)
+        elif global_rows:
+            configured_units = min(row.available_units for row in global_rows if not row.closed) if not closed else 0
+
+        day_reservations = [booking for booking in reservations if booking.check_in <= day < booking.check_out]
+        day_blocking_reservations = [booking for booking in day_reservations if booking.status in BLOCKING_STATUSES]
+        reserved_units = sum(room_capacity.get(booking.room_id or -1, 1) for booking in day_blocking_reservations)
+        available_units = max(0, configured_units - reserved_units)
+        is_past = day < today
+        available = not is_past and not closed and available_units > 0
+        has_requests = any(booking.status not in BLOCKING_STATUSES for booking in day_reservations)
+        status_label = (
+            "past"
+            if is_past
+            else "blocked"
+            if closed
+            else "reserved"
+            if day_blocking_reservations and available_units == 0
+            else "limited"
+            if day_blocking_reservations
+            else "requested"
+            if can_manage and has_requests
+            else "available"
+        )
+
+        payload = {
+            "date": day.isoformat(),
+            "available": available,
+            "status": status_label,
+            "availableUnits": available_units,
+            "reservedUnits": reserved_units,
+            "totalUnits": total_units,
+            "closed": closed,
+            "minNights": max([row.min_nights for row in rows], default=1),
+            "priceOverride": float(rows[0].price_override) if rows and rows[0].price_override is not None else None,
+        }
+        if can_manage:
+            payload["reservations"] = [
+                {
+                    "id": booking.id,
+                    "bookingReference": booking.booking_reference,
+                    "guestName": booking.user.full_name if booking.user else booking.full_name,
+                    "guestEmail": booking.user.email if booking.user else booking.email,
+                    "checkIn": booking.check_in.isoformat(),
+                    "checkOut": booking.check_out.isoformat(),
+                    "status": booking.status.value,
+                    "total": float(booking.total_amount),
+                }
+                for booking in day_reservations
+            ]
+        days.append(payload)
+
+    return days
 
 
 def _property_fields(payload: PropertyCreate, user: User) -> dict:
@@ -233,6 +347,7 @@ def create_property(
     db.add(property_)
     db.flush()
     _sync_property_images(db, property_, payload.gallery, fields["image_url"])
+    ensure_bookable_rooms(db, property_)
     if user.role == Role.hotel_admin and user.host_profile and not user.host_profile.onboarding_completed_at:
         from app.core.security import now_utc
 
@@ -268,6 +383,7 @@ def update_property(
         setattr(property_, key, value)
     property_.amenities = _get_or_create_amenities(db, payload.amenities)
     _sync_property_images(db, property_, payload.gallery, fields["image_url"])
+    ensure_bookable_rooms(db, property_)
     db.commit()
     cache.delete_prefix("search:properties")
     return property_to_frontend(property_)
@@ -294,6 +410,42 @@ def delete_property(
 @router.post("/properties/{property_id}/availability")
 def check_availability(property_id: int, payload: AvailabilityRequest, db: Session = Depends(get_db)):
     return availability_payload(db, property_id=property_id, check_in=payload.check_in, check_out=payload.check_out, guests=payload.guests)
+
+
+@router.get("/properties/{property_id}/availability")
+def get_availability(
+    property_id: int,
+    check_in: date | None = Query(default=None, alias="check_in"),
+    check_out: date | None = Query(default=None, alias="check_out"),
+    check_in_camel: date | None = Query(default=None, alias="checkIn"),
+    check_out_camel: date | None = Query(default=None, alias="checkOut"),
+    guests: int = Query(default=1, ge=1),
+    db: Session = Depends(get_db),
+):
+    resolved_check_in = check_in or check_in_camel
+    resolved_check_out = check_out or check_out_camel
+    if not resolved_check_in or not resolved_check_out:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="check_in and check_out are required")
+    return availability_payload(db, property_id=property_id, check_in=resolved_check_in, check_out=resolved_check_out, guests=guests)
+
+
+@router.get("/properties/{property_id}/reservations/calendar")
+def get_reservation_calendar(
+    property_id: int,
+    start: date | None = Query(default=None),
+    end: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    property_ = _query_properties(db).filter(Property.id == property_id).first()
+    if not property_ or property_.deleted_at:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
+    today = date.today()
+    resolved_start = start or today
+    resolved_end = end or resolved_start + timedelta(days=89)
+    if resolved_end < resolved_start:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="end must be after start")
+    return _public_reservation_calendar(db, property_, resolved_start, resolved_end, user)
 
 
 @router.get("/properties/{property_id}/calendar")

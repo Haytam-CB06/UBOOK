@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.auth import _user_payload
 from app.api.deps import get_current_user
 from app.core.crypto import decrypt_text, encrypt_text
 from app.core.database import get_db
-from app.models import AccountPreference, HostProfile, NotificationPreference, Role, TravelerProfile, User
+from app.models import AccountPreference, HostProfile, HostReview, NotificationPreference, Property, Review, Role, TravelerProfile, User
 from app.schemas.platform import AccountPreferenceUpdate, NotificationPreferenceUpdate, ProfileUpdate
+from app.services.serialization import property_to_frontend, review_to_frontend
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
@@ -49,6 +50,67 @@ def update_profile(payload: ProfileUpdate, user: User = Depends(get_current_user
     db.commit()
     db.refresh(user)
     return {"user": _user_payload(user), "profile": _profile_payload(profile)}
+
+
+@router.get("/hosts/{host_id}")
+def get_public_host_profile(host_id: int, db: Session = Depends(get_db)):
+    host = db.get(User, host_id)
+    if not host or host.deleted_at or host.role != Role.hotel_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Host not found")
+
+    properties = (
+        db.query(Property)
+        .filter(Property.owner_id == host.id, Property.deleted_at.is_(None), Property.is_active.is_(True))
+        .order_by(Property.average_rating.desc(), Property.review_count.desc(), Property.created_at.desc())
+        .all()
+    )
+    property_ids = [property_.id for property_ in properties]
+    host_reviews = (
+        db.query(HostReview)
+        .filter(HostReview.host_id == host.id, HostReview.deleted_at.is_(None))
+        .order_by(HostReview.created_at.desc())
+        .all()
+    )
+    property_reviews = (
+        db.query(Review)
+        .filter(Review.property_id.in_(property_ids), Review.deleted_at.is_(None))
+        .order_by(Review.created_at.desc())
+        .all()
+        if property_ids
+        else []
+    )
+
+    host_review_payloads = [_host_review_payload(review) for review in host_reviews]
+    property_review_payloads = [_property_review_payload(review) for review in property_reviews]
+    all_reviews = sorted(
+        [
+            *[{**review, "reviewType": "host", "propertyTitle": "Host review"} for review in host_review_payloads],
+            *[{**review, "reviewType": "apartment"} for review in property_review_payloads],
+        ],
+        key=lambda review: review.get("createdAt", ""),
+        reverse=True,
+    )
+
+    return {
+        "host": {
+            "id": host.id,
+            "name": host.full_name,
+            "email": host.email,
+            "avatarUrl": host.avatar_url,
+            "createdAt": host.created_at.isoformat(),
+        },
+        "profile": _profile_payload(host.host_profile),
+        "properties": [property_to_frontend(property_) for property_ in properties],
+        "hostReviews": host_review_payloads,
+        "propertyReviews": property_review_payloads,
+        "allReviews": all_reviews,
+        "stats": {
+            "listingCount": len(properties),
+            "hostReviewCount": len(host_reviews),
+            "propertyReviewCount": len(property_reviews),
+            "averagePropertyRating": round(sum(float(property_.average_rating or property_.rating or 0) for property_ in properties) / len(properties), 2) if properties else 0,
+        },
+    }
 
 
 @router.post("/me/verify-email")
@@ -112,6 +174,32 @@ def _profile_payload(profile) -> dict:
         "onboardingExitedAt": getattr(profile, "onboarding_exited_at", None).isoformat() if getattr(profile, "onboarding_exited_at", None) else None,
         "createdAt": profile.created_at.isoformat(),
     }
+
+
+def _host_review_payload(review: HostReview) -> dict:
+    reviewer = review.reviewer
+    return {
+        "id": review.id,
+        "bookingId": review.booking_id,
+        "hostId": review.host_id,
+        "reviewerId": review.reviewer_id,
+        "author": reviewer.full_name if reviewer else "Verified guest",
+        "avatar": reviewer.avatar_url if reviewer else "",
+        "rating": review.rating,
+        "comment": review.comment,
+        "createdAt": review.created_at.isoformat(),
+    }
+
+
+def _property_review_payload(review: Review) -> dict:
+    property_title = ""
+    if review.property:
+        property_title = review.property.title or review.property.name
+    payload = review_to_frontend(review)
+    payload["propertyId"] = review.property_id
+    payload["propertyTitle"] = property_title
+    payload["createdAt"] = review.created_at.isoformat()
+    return payload
 
 
 def _notification_preferences(user: User, db: Session) -> NotificationPreference:

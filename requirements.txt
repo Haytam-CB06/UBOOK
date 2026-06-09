@@ -22,3 +22,5 @@ pytest==8.3.4
 pytest-cov==6.0.0
 httpx==0.28.1
 freezegun==1.5.1
+sqlalchemy-utils==0.41.2
+cryptography==44.0.0

@@ -35,6 +35,14 @@ def create_payment(db: Session, *, payload: PaymentCreate, user: User) -> Paymen
 
 def confirm_payment(db: Session, *, payment: Payment, payload: PaymentConfirm, user: User) -> Payment:
     _assert_payment_access(payment.booking, user)
+    if payment.status == PaymentStatus.succeeded and payload.status != PaymentStatus.succeeded:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Succeeded payments cannot be downgraded")
+    if payment.status == PaymentStatus.refunded and payload.status != PaymentStatus.refunded:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Refunded payments cannot be changed")
+    if payment.status == PaymentStatus.succeeded and payload.status == PaymentStatus.succeeded:
+        if payload.transaction_id and payment.transaction_id and payload.transaction_id != payment.transaction_id:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Payment already succeeded with a different transaction")
+        return payment
     if payload.status == PaymentStatus.succeeded and not payload.transaction_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="transactionId is required for succeeded payments")
     payment.status = payload.status
@@ -49,12 +57,6 @@ def confirm_payment(db: Session, *, payment: Payment, payload: PaymentConfirm, u
         body=f"Payment for booking {payment.booking.booking_reference} is {payload.status.value}.",
         user=user,
     )
-    if payload.status == PaymentStatus.succeeded and payment.booking.status == BookingStatus.pending:
-        from app.services.booking_service import transition_booking
-        from app.services.notification_service import booking_confirmation
-
-        transition_booking(db, booking=payment.booking, to_status=BookingStatus.confirmed, actor=user, reason="payment_succeeded")
-        booking_confirmation(db, email=payment.booking.email, booking_reference=payment.booking.booking_reference)
     return payment
 
 

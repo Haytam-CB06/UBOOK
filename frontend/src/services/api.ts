@@ -8,15 +8,93 @@ import type {
   NotificationRecord,
   PaymentRecord,
   Property,
+  PublicHostProfile,
+  ReservationCalendarDay,
   TravelerDashboard,
   UserBooking,
   Wishlist
 } from "../types/api";
 
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
+const localApiBaseUrl =
+  typeof window !== "undefined" && window.location.hostname === "127.0.0.1"
+    ? "http://127.0.0.1:8080/api"
+    : "http://localhost:8080/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || localApiBaseUrl;
 const SESSION_EXPIRES_AT_KEY = "ubook_session_expires_at";
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+type BrowserSessionStorage = "local" | "session";
+const SESSION_STORAGE_MODE: BrowserSessionStorage =
+  import.meta.env.VITE_AUTH_SESSION_STORAGE === "session" ? "session" : "local";
+
+function getStorage(mode: BrowserSessionStorage): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return mode === "session" ? window.sessionStorage : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function getPreferredStorage(): Storage | null {
+  return getStorage(SESSION_STORAGE_MODE) || getStorage("local") || getStorage("session");
+}
+
+function getFallbackStorage(): Storage | null {
+  return getStorage(SESSION_STORAGE_MODE === "local" ? "session" : "local");
+}
+
+function setSessionItem(key: string, value: string) {
+  getPreferredStorage()?.setItem(key, value);
+}
+
+function getSessionItem(key: string) {
+  return getPreferredStorage()?.getItem(key) || getFallbackStorage()?.getItem(key) || null;
+}
+
+function removeSessionItem(key: string) {
+  getStorage("local")?.removeItem(key);
+  getStorage("session")?.removeItem(key);
+}
+
+function parseSessionExpiry(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value > 10_000_000_000 ? value : value * 1000;
+  }
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue)) {
+    return numericValue > 10_000_000_000 ? numericValue : numericValue * 1000;
+  }
+
+  const parsedDate = Date.parse(value);
+  return Number.isFinite(parsedDate) ? parsedDate : null;
+}
+
+function resolveSessionExpiry(data?: unknown): number {
+  const payload = data as Record<string, unknown> | undefined;
+  const session = payload?.session as Record<string, unknown> | undefined;
+  const candidates = [
+    payload?.refreshExpiresAt,
+    payload?.refresh_expires_at,
+    payload?.sessionExpiresAt,
+    payload?.session_expires_at,
+    payload?.expiresAt,
+    payload?.expires_at,
+    session?.expiresAt,
+    session?.expires_at
+  ];
+
+  for (const candidate of candidates) {
+    const expiresAt = parseSessionExpiry(candidate);
+    if (expiresAt && expiresAt > Date.now()) {
+      return expiresAt;
+    }
+  }
+
+  return Date.now() + SESSION_DURATION_MS;
+}
 export interface PaymentOverview {
   totalPaid?: number;
   totalPending?: number;
@@ -142,7 +220,7 @@ function getCookie(name: string) {
 }
 
 function persistAuth(data?: unknown) {
-  window.localStorage.setItem(SESSION_EXPIRES_AT_KEY, String(Date.now() + SESSION_DURATION_MS));
+  setSessionItem(SESSION_EXPIRES_AT_KEY, String(resolveSessionExpiry(data)));
   const maybeAuth = data as { user?: { role?: string; rawRole?: string; raw_role?: string } } | undefined;
   storeSessionRole(maybeAuth?.user?.role || maybeAuth?.user?.rawRole || maybeAuth?.user?.raw_role);
 }
@@ -283,6 +361,11 @@ export async function getProfileCenter() {
   return response.data;
 }
 
+export async function updateProfile(payload: { fullName?: string; phone?: string; avatarUrl?: string; bio?: string }) {
+  const response = await client.put("/profiles/me", payload);
+  return response.data;
+}
+
 export async function verifyEmail() {
   const response = await client.post("/profiles/me/verify-email");
   return response.data;
@@ -298,10 +381,9 @@ export async function getPropertyById(id: number): Promise<Property | undefined>
   return response.data;
 }
 
-export async function checkAvailability(propertyId: number, checkIn: string, checkOut: string) {
-  const response = await client.post(`/properties/${propertyId}/availability`, {
-    checkIn,
-    checkOut
+export async function checkAvailability(propertyId: number, checkIn: string, checkOut: string, guests = 1) {
+  const response = await client.get(`/properties/${propertyId}/availability`, {
+    params: { checkIn, checkOut, guests }
   });
   return response.data;
 }
@@ -328,8 +410,23 @@ export async function createBooking(payload: BookingPayload) {
   return response.data;
 }
 
+export async function createReservation(payload: BookingPayload): Promise<UserBooking> {
+  const response = await client.post("/reservations", payload);
+  return response.data;
+}
+
 export async function getUserBookings(): Promise<UserBooking[]> {
   const response = await client.get("/bookings/me");
+  return response.data;
+}
+
+export async function getMyReservations(): Promise<UserBooking[]> {
+  const response = await client.get("/reservations/me");
+  return response.data;
+}
+
+export async function cancelReservation(bookingId: number): Promise<UserBooking> {
+  const response = await client.patch(`/reservations/${bookingId}/cancel`);
   return response.data;
 }
 
@@ -350,6 +447,26 @@ export async function getTravelerDashboard(): Promise<TravelerDashboard> {
 
 export async function getHostDashboard(): Promise<HostDashboard> {
   const response = await client.get("/host/dashboard");
+  return response.data;
+}
+
+export async function getHostReservations(): Promise<UserBooking[]> {
+  const response = await client.get("/host/reservations");
+  return response.data;
+}
+
+export async function confirmHostReservation(bookingId: number): Promise<UserBooking> {
+  const response = await client.patch(`/host/reservations/${bookingId}/confirm`);
+  return response.data;
+}
+
+export async function cancelHostReservation(bookingId: number): Promise<UserBooking> {
+  const response = await client.patch(`/host/reservations/${bookingId}/cancel`);
+  return response.data;
+}
+
+export async function completeHostReservation(bookingId: number): Promise<UserBooking> {
+  const response = await client.patch(`/host/reservations/${bookingId}/complete`);
   return response.data;
 }
 
@@ -429,6 +546,11 @@ export async function getAmenities(): Promise<Array<{ id: number; name: string; 
 
 export async function getPropertyCalendar(propertyId: number, params?: { start?: string; end?: string }) {
   const response = await client.get(`/properties/${propertyId}/calendar`, { params });
+  return response.data;
+}
+
+export async function getPropertyReservationCalendar(propertyId: number, params?: { start?: string; end?: string }): Promise<ReservationCalendarDay[]> {
+  const response = await client.get(`/properties/${propertyId}/reservations/calendar`, { params });
   return response.data;
 }
 
@@ -585,7 +707,7 @@ export async function getWebsocketToken(): Promise<string> {
 }
 
 export function getSessionExpiresAt() {
-  const value = window.localStorage.getItem(SESSION_EXPIRES_AT_KEY);
+  const value = getSessionItem(SESSION_EXPIRES_AT_KEY);
   return value ? Number(value) : null;
 }
 
@@ -601,11 +723,11 @@ export function isSessionExpired() {
 
 export function ensureSessionExpiry() {
   if (!getSessionExpiresAt()) {
-    window.localStorage.setItem(SESSION_EXPIRES_AT_KEY, String(Date.now() + SESSION_DURATION_MS));
+    setSessionItem(SESSION_EXPIRES_AT_KEY, String(Date.now() + SESSION_DURATION_MS));
   }
 }
 export function clearAuthSession() {
-  window.localStorage.removeItem(SESSION_EXPIRES_AT_KEY);
+  removeSessionItem(SESSION_EXPIRES_AT_KEY);
   clearStoredSessionRole();
 }
 
@@ -676,6 +798,35 @@ export async function getFavorites(): Promise<Property[]> {
 
 export async function getMyReviews(): Promise<ReviewCenter> {
   const response = await client.get("/reviews/me");
+  return response.data;
+}
+
+export async function createPropertyReview(payload: { propertyId: number; bookingId: number; rating: number; comment: string; imageUrls?: string[] }) {
+  const response = await client.post("/reviews/property", payload);
+  return response.data;
+}
+
+export async function createHostReview(payload: { hostId: number; bookingId: number; rating: number; comment: string }) {
+  const response = await client.post("/reviews/host", payload);
+  return response.data;
+}
+
+export async function createStayReview(payload: {
+  propertyId: number;
+  bookingId: number;
+  hostId: number;
+  apartmentRating: number;
+  apartmentComment: string;
+  hostRating: number;
+  hostComment: string;
+  imageUrls?: string[];
+}) {
+  const response = await client.post("/reviews/stay", payload);
+  return response.data;
+}
+
+export async function getPublicHostProfile(hostId: number): Promise<PublicHostProfile> {
+  const response = await client.get(`/profiles/hosts/${hostId}`);
   return response.data;
 }
 

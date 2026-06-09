@@ -19,6 +19,7 @@ export type Property = {
   bedrooms: number;
   bathrooms: number;
   host: string;
+  hostId?: number | null;
   hostAvatar: string;
   hostSince: string;
   verified: boolean;
@@ -58,7 +59,7 @@ export type Conversation = {
   messages: Array<{ from: "me" | "them"; body: string; time: string; read?: boolean }>;
 };
 
-export const onboardingSteps = ["Property type", "Address", "Amenities", "Photos", "Pricing", "Availability", "Preview", "Publish"];
+export const onboardingSteps = ["Basics", "Location", "Amenities", "Photos", "Pricing", "Calendar", "Preview", "Publish"];
 
 export const propertyTypeOptions = ["All", "Apartment", "Hotel", "Villa", "Student Housing", "Shared Room", "Unique Stay"];
 export const amenityOptions = ["Workspace", "Pool", "Laundry", "Breakfast", "Smart lock", "Transit"];
@@ -84,6 +85,7 @@ export function toExperienceProperty(property: ApiProperty): Property {
     bedrooms: property.bedrooms ?? 1,
     bathrooms: Number(property.bathrooms ?? 1),
     host: property.host || "Verified host",
+    hostId: property.hostId,
     hostAvatar: property.hostAvatar || imageManifest.avatars.maya,
     hostSince: property.hostSince ? new Date(property.hostSince).getFullYear().toString() : "Verified",
     verified: Boolean(property.verified),

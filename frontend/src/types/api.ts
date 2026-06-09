@@ -2,11 +2,17 @@ export type PropertyType = "Riad" | "Apartment" | "House" | "Hotel" | "Villa" | 
 
 export interface Review {
   id: number;
+  propertyId?: number;
+  propertyTitle?: string;
+  bookingId?: number;
+  hostId?: number;
+  reviewerId?: number;
   author: string;
   role: string;
   avatar?: string;
   rating: number;
   comment: string;
+  createdAt?: string;
 }
 
 export interface RoomOption {
@@ -86,12 +92,43 @@ export interface UserBooking {
   propertyImage?: string;
   hostId?: number | null;
   hostName?: string | null;
+  guestId?: number | null;
+  guestName?: string | null;
+  guestEmail?: string | null;
   city: string;
+  checkIn?: string;
+  checkOut?: string;
   dates: string;
   nights: number;
   status: string;
+  statusRaw?: string;
   total: number;
+  createdAt?: string;
+  updatedAt?: string;
+  specialRequests?: string | null;
   payload?: Record<string, unknown>;
+}
+
+export interface ReservationCalendarDay {
+  date: string;
+  available: boolean;
+  status: "available" | "limited" | "reserved" | "blocked" | "past" | string;
+  availableUnits: number;
+  reservedUnits: number;
+  totalUnits: number;
+  closed: boolean;
+  minNights: number;
+  priceOverride?: number | null;
+  reservations?: Array<{
+    id: number;
+    bookingReference: string;
+    guestName?: string | null;
+    guestEmail?: string | null;
+    checkIn: string;
+    checkOut: string;
+    status: string;
+    total: number;
+  }>;
 }
 
 export interface AdminMetric {
@@ -223,6 +260,36 @@ export interface Conversation {
   hostId: number;
   lastMessageAt?: string | null;
   messages?: Message[];
+}
+
+export interface PublicHostProfile {
+  host: {
+    id: number;
+    name?: string | null;
+    email?: string | null;
+    avatarUrl?: string | null;
+    createdAt?: string;
+  };
+  profile: {
+    id?: number;
+    bio?: string | null;
+    averageRating?: number;
+    reviewCount?: number;
+    verifiedBadge?: boolean;
+    responseRate?: number;
+    responseTimeMinutes?: number | null;
+    createdAt?: string;
+  };
+  properties: Property[];
+  hostReviews: Review[];
+  propertyReviews: Review[];
+  allReviews?: Review[];
+  stats: {
+    listingCount: number;
+    hostReviewCount: number;
+    propertyReviewCount: number;
+    averagePropertyRating: number;
+  };
 }
 
 export interface Message {

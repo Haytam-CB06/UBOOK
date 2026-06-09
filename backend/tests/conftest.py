@@ -10,6 +10,9 @@ os.environ.setdefault("UBOOK_DATABASE_URL", f"sqlite:///{test_db_path.as_posix()
 os.environ.setdefault("UBOOK_SECRET_KEY", "test-secret-key-with-enough-entropy-for-jwt-signing")
 os.environ.setdefault("UBOOK_REFRESH_SECRET_KEY", "test-refresh-secret-key-with-enough-entropy")
 os.environ.setdefault("UBOOK_RATE_LIMIT_REQUESTS", "10000")
+os.environ["UBOOK_CORS_ORIGINS"] = "http://localhost:5173,http://127.0.0.1:5173"
+os.environ["UBOOK_FRONTEND_URL"] = "http://localhost:5173"
+os.environ["UBOOK_OAUTH_JAVASCRIPT_ORIGINS"] = "http://localhost:5173/,http://127.0.0.1:5173"
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

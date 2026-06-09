@@ -28,6 +28,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from app.core.database import Base
+from app.core.config import settings
+from sqlalchemy_utils import EncryptedType
+from sqlalchemy_utils.types.encrypted.encrypted_type import FernetEngine
 
 
 def utcnow() -> datetime:
@@ -197,6 +200,14 @@ class TravelerProfile(Base, TimestampMixin):
     average_rating_received: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     review_count_received: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     verification_status: Mapped[VerificationStatus] = mapped_column(Enum(VerificationStatus), default=VerificationStatus.unverified, nullable=False, index=True)
+
+    nationality: Mapped[str | None] = mapped_column(String(100))
+    birth_date: Mapped[date | None] = mapped_column(Date)
+    identification_number: Mapped[str | None] = mapped_column(
+        EncryptedType(String(255), settings.field_encryption_key, FernetEngine, 'utf-8')
+    )
+    emergency_contact_name: Mapped[str | None] = mapped_column(String(160))
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(40))
 
     user: Mapped[User] = relationship(back_populates="traveler_profile")
 
@@ -409,7 +420,7 @@ class Booking(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_bookings_overlap_lookup", "property_id", "room_id", "check_in", "check_out", "status"),
         CheckConstraint("check_in < check_out", name="ck_bookings_valid_date_range"),
-        CheckConstraint("guests > 0", name="ck_bookings_guests_positive"),
+        CheckConstraint("traveler_count > 0", name="ck_bookings_traveler_count_positive"),
         CheckConstraint("total_amount >= 0", name="ck_bookings_total_non_negative"),
     )
 
@@ -420,11 +431,12 @@ class Booking(Base, TimestampMixin):
     room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id", ondelete="SET NULL"), index=True)
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
     email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
-    guests: Mapped[int] = mapped_column(Integer, nullable=False)
+    traveler_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     check_in: Mapped[date] = mapped_column(Date, nullable=False)
     check_out: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[BookingStatus] = mapped_column(Enum(BookingStatus), default=BookingStatus.pending, nullable=False, index=True)
-    notes: Mapped[str | None] = mapped_column(Text)
+    special_requests: Mapped[str | None] = mapped_column(Text)
+    arrival_time: Mapped[str | None] = mapped_column(String(20))
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     pricing_breakdown: Mapped[dict[str, Any]] = mapped_column(JsonDictType, default=dict, nullable=False)
@@ -435,6 +447,25 @@ class Booking(Base, TimestampMixin):
     history: Mapped[list[BookingStatusHistory]] = relationship(back_populates="booking", cascade="all, delete-orphan")
     reviews: Mapped[list[Review]] = relationship(back_populates="booking")
     payments: Mapped[list[Payment]] = relationship(back_populates="booking", cascade="all, delete-orphan")
+    travelers: Mapped[list[Traveler]] = relationship(back_populates="booking", cascade="all, delete-orphan")
+
+
+class Traveler(Base, TimestampMixin):
+    __tablename__ = "travelers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    booking_id: Mapped[int] = mapped_column(ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, index=True)
+    full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    nationality: Mapped[str] = mapped_column(String(100), nullable=False)
+    birth_date: Mapped[date] = mapped_column(Date, nullable=False)
+    passport_number: Mapped[str] = mapped_column(
+        EncryptedType(String(255), settings.field_encryption_key, FernetEngine, 'utf-8'),
+        nullable=False
+    )
+    gender: Mapped[str | None] = mapped_column(String(20))
+    relationship_to_primary_guest: Mapped[str | None] = mapped_column(String(100))
+
+    booking: Mapped[Booking] = relationship(back_populates="travelers")
 
 
 class BookingStatusHistory(Base):

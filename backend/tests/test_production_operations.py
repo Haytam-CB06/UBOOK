@@ -1,6 +1,30 @@
 from __future__ import annotations
 
+from io import BytesIO
+
+from PIL import Image
+
 from conftest import auth_headers
+
+
+def test_upload_accepts_real_picture_even_with_generic_mime(client, monkeypatch, tmp_path):
+    from app.api import uploads
+    from app.services.storage_service import LocalStorage
+
+    monkeypatch.setattr(uploads, "storage", LocalStorage(str(tmp_path)))
+    owner_headers = auth_headers(client, "owner@ubook.ma", "OwnerPass123!")
+    buffer = BytesIO()
+    Image.new("RGBA", (96, 72), (41, 128, 185, 180)).save(buffer, format="BMP")
+    buffer.seek(0)
+
+    response = client.post(
+        "/api/uploads/images",
+        files={"file": ("living-room.camera", buffer.getvalue(), "application/octet-stream")},
+        headers=owner_headers,
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["url"].endswith(".jpg")
 
 
 def test_saved_searches_preferences_and_calendar_management(client):
@@ -64,7 +88,7 @@ def test_payment_confirmation_support_reports_disputes_and_read_receipts(client)
     )
     assert confirmed.status_code == 200, confirmed.text
     refreshed_booking = client.get(f"/api/bookings/{booking.json()['id']}", headers=guest_headers)
-    assert refreshed_booking.json()["status"] == "Confirmed"
+    assert refreshed_booking.json()["status"] == "Pending"
 
     support = client.post("/api/support", json={"subject": "Arrival help", "body": "I need arrival support."}, headers=guest_headers)
     assert support.status_code == 201, support.text

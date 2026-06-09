@@ -82,7 +82,7 @@ def _frontend_route_for_user(user: User) -> str:
 
 
 def _allowed_frontend_origins() -> set[str]:
-    origins = {settings.frontend_url.rstrip("/")}
+    origins = set(settings.frontend_url_list)
     origins.update(settings.oauth_javascript_origin_list)
     return {origin.rstrip("/") for origin in origins if origin}
 
@@ -97,13 +97,13 @@ def _frontend_origin_from_request(request: Request) -> str:
         origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
         if origin in allowed:
             return origin
-    return settings.frontend_url.rstrip("/")
+    return settings.primary_frontend_url.rstrip("/")
 
 
 def _login_redirect_url(error: str | None = None, temp_token: str | None = None, frontend_origin: str | None = None) -> str:
     from urllib.parse import urlencode
 
-    base = f"{(frontend_origin or settings.frontend_url).rstrip('/')}/login"
+    base = f"{(frontend_origin or settings.primary_frontend_url).rstrip('/')}/login"
     query: dict[str, str] = {}
     if error:
         query["oauthError"] = error
@@ -113,7 +113,7 @@ def _login_redirect_url(error: str | None = None, temp_token: str | None = None,
 
 
 def _workspace_redirect_url(user: User, frontend_origin: str | None = None) -> str:
-    return f"{(frontend_origin or settings.frontend_url).rstrip('/')}{_frontend_route_for_user(user)}"
+    return f"{(frontend_origin or settings.primary_frontend_url).rstrip('/')}{_frontend_route_for_user(user)}"
 
 
 def _oauth_error_message(exc: Exception) -> str:
@@ -146,6 +146,12 @@ def _user_payload(user: User) -> dict:
         "rawRole": user.role.value,
         "otpEnabled": user.otp_enabled,
         "otp_enabled": user.otp_enabled,
+        "otpVerified": user.otp_verified,
+        "otp_verified": user.otp_verified,
+        "twoFactorRequired": not user.otp_enabled,
+        "two_factor_required": not user.otp_enabled,
+        "securitySetupRequired": not user.otp_enabled,
+        "security_setup_required": not user.otp_enabled,
         "avatarUrl": user.avatar_url,
         "phone": decrypt_text(user.phone),
         "emailVerified": user.email_verified,
