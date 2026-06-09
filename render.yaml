@@ -97,6 +97,9 @@ services:
       - key: VITE_AUTH_SESSION_STORAGE
         value: local
 
+      - key: NODE_VERSION
+        value: 20.19.0
+
     routes:
       - type: rewrite
         source: /*
