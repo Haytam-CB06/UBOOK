@@ -85,6 +85,14 @@ class Settings(BaseSettings):
             value = value.replace("postgresql://", "postgresql+psycopg://", 1)
         return value
 
+    @field_validator("auth_cookie_domain", mode="before")
+    @classmethod
+    def normalize_blank_cookie_domain(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = str(value).strip()
+        return value or None
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip().rstrip("/") for origin in self.cors_origins.split(",") if origin.strip()]

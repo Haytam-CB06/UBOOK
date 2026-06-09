@@ -34,6 +34,24 @@ def test_register_login_refresh_me_logout(client):
     assert logout.status_code == 200
 
 
+def test_refresh_survives_render_proxy_ip_changes(client):
+    user_agent = "Mozilla/5.0 UBOOK Render smoke test"
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "guest@ubook.ma", "password": "GuestPass123!"},
+        headers={"user-agent": user_agent, "x-forwarded-for": "10.193.111.3"},
+    )
+    assert login.status_code == 200, login.text
+
+    refresh = client.post(
+        "/api/auth/refresh",
+        json={"refreshToken": login.json()["refreshToken"]},
+        headers={"user-agent": user_agent, "x-forwarded-for": "10.195.112.64"},
+    )
+    assert refresh.status_code == 200, refresh.text
+    assert refresh.json()["accessToken"]
+
+
 def test_2fa_setup_login_validate_and_disable(client):
     headers = auth_headers(client, "guest@ubook.ma", "GuestPass123!")
     setup = client.post("/api/auth/2fa/enable", headers=headers)

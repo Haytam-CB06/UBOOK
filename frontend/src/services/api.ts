@@ -22,6 +22,8 @@ const localApiBaseUrl =
     : "http://localhost:8080/api";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || localApiBaseUrl;
 const SESSION_EXPIRES_AT_KEY = "ubook_session_expires_at";
+const ACCESS_TOKEN_KEY = "ubook_access_token";
+const REFRESH_TOKEN_KEY = "ubook_refresh_token";
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 type BrowserSessionStorage = "local" | "session";
 const SESSION_STORAGE_MODE: BrowserSessionStorage =
@@ -55,6 +57,14 @@ function getSessionItem(key: string) {
 function removeSessionItem(key: string) {
   getStorage("local")?.removeItem(key);
   getStorage("session")?.removeItem(key);
+}
+
+function getAccessToken() {
+  return getSessionItem(ACCESS_TOKEN_KEY);
+}
+
+function getRefreshToken() {
+  return getSessionItem(REFRESH_TOKEN_KEY);
 }
 
 function parseSessionExpiry(value: unknown): number | null {
@@ -166,6 +176,13 @@ const client = axios.create({
 });
 let refreshPromise: Promise<unknown> | null = null;
 client.interceptors.request.use((config) => {
+  const accessToken = getAccessToken();
+  if (accessToken) {
+    config.headers = config.headers || {};
+    if (!config.headers.Authorization) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+  }
   const csrfToken = getCookie("ubook_csrf_token");
   if (csrfToken && ["post", "put", "patch", "delete"].includes((config.method || "").toLowerCase())) {
     config.headers = config.headers || {};
@@ -187,15 +204,7 @@ client.interceptors.response.use(
 
       try {
         if (!refreshPromise) {
-          refreshPromise = axios
-            .post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
-            .then((response) => {
-              persistAuth(response.data);
-              return response.data;
-            })
-            .finally(() => {
-              refreshPromise = null;
-            });
+          refreshPromise = refreshAuthSession();
         }
 
         await refreshPromise;
@@ -221,8 +230,38 @@ function getCookie(name: string) {
 
 function persistAuth(data?: unknown) {
   setSessionItem(SESSION_EXPIRES_AT_KEY, String(resolveSessionExpiry(data)));
-  const maybeAuth = data as { user?: { role?: string; rawRole?: string; raw_role?: string } } | undefined;
+  const maybeAuth = data as
+    | {
+        accessToken?: string;
+        access_token?: string;
+        token?: string;
+        refreshToken?: string;
+        refresh_token?: string;
+        user?: { role?: string; rawRole?: string; raw_role?: string };
+      }
+    | undefined;
+  const accessToken = maybeAuth?.accessToken || maybeAuth?.access_token || maybeAuth?.token;
+  const refreshToken = maybeAuth?.refreshToken || maybeAuth?.refresh_token;
+  if (accessToken) {
+    setSessionItem(ACCESS_TOKEN_KEY, accessToken);
+  }
+  if (refreshToken) {
+    setSessionItem(REFRESH_TOKEN_KEY, refreshToken);
+  }
   storeSessionRole(maybeAuth?.user?.role || maybeAuth?.user?.rawRole || maybeAuth?.user?.raw_role);
+}
+
+function refreshAuthSession() {
+  const refreshToken = getRefreshToken();
+  return axios
+    .post(`${API_BASE_URL}/auth/refresh`, refreshToken ? { refreshToken } : {}, { withCredentials: true })
+    .then((response) => {
+      persistAuth(response.data);
+      return response.data;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
 }
 
 export interface LoginPayload {
@@ -728,20 +767,14 @@ export function ensureSessionExpiry() {
 }
 export function clearAuthSession() {
   removeSessionItem(SESSION_EXPIRES_AT_KEY);
+  removeSessionItem(ACCESS_TOKEN_KEY);
+  removeSessionItem(REFRESH_TOKEN_KEY);
   clearStoredSessionRole();
 }
 
 export async function extendSession() {
   if (!refreshPromise) {
-    refreshPromise = axios
-      .post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true })
-      .then((response) => {
-        persistAuth(response.data);
-        return response.data;
-      })
-      .finally(() => {
-        refreshPromise = null;
-      });
+    refreshPromise = refreshAuthSession();
   }
 
   return refreshPromise;

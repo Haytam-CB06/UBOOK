@@ -193,7 +193,13 @@ def _clear_auth_cookies(response: Response) -> None:
 def _device_fingerprint(request: Request) -> str:
     import hashlib
 
-    raw = "|".join([request.headers.get("user-agent", ""), client_ip(request)])
+    raw = "|".join(
+        [
+            request.headers.get("user-agent", ""),
+            request.headers.get("accept-language", ""),
+            request.headers.get("sec-ch-ua-platform", ""),
+        ]
+    )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
