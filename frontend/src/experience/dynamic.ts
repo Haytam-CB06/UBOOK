@@ -6,7 +6,7 @@ export type WorkspaceRole = "traveler" | "host" | "admin";
 export type Property = {
   id: number;
   title: string;
-  type: "Apartment" | "Hotel" | "Villa" | "Student Housing" | "Shared Room" | "Unique Stay" | string;
+  type: "Riad" | "Apartment" | "Hotel" | "Villa" | "House" | "Resort" | string;
   city: string;
   country: string;
   neighborhood: string;
@@ -61,7 +61,7 @@ export type Conversation = {
 
 export const onboardingSteps = ["Basics", "Location", "Amenities", "Photos", "Pricing", "Calendar", "Preview", "Publish"];
 
-export const propertyTypeOptions = ["All", "Apartment", "Hotel", "Villa", "Student Housing", "Shared Room", "Unique Stay"];
+export const propertyTypeOptions = ["All", "Riad", "Apartment", "Villa", "Hotel", "House", "Resort"];
 export const amenityOptions = ["Workspace", "Pool", "Laundry", "Breakfast", "Smart lock", "Transit"];
 export const trustOptions = ["Verified host", "Instant book", "Rating 4.8+", "Flexible cancellation"];
 
@@ -164,8 +164,8 @@ export function categoryData(properties: Property[]) {
   for (const property of properties) {
     counts.set(property.type, (counts.get(property.type) || 0) + 1);
   }
-  return ["Apartment", "Hotel", "Villa", "Student Housing", "Shared Room", "Unique Stay"].map((label) => ({
-    label: label === "Apartment" ? "Apartments" : label === "Hotel" ? "Hotels" : label === "Villa" ? "Villas" : `${label}s`,
+  return ["Riad", "Apartment", "Villa", "Hotel"].map((label) => ({
+    label: label === "Riad" ? "Riads" : label === "Apartment" ? "Apartments" : label === "Villa" ? "Villas" : "Hotels",
     value: label,
     detail: categoryDetail(label),
     count: String(counts.get(label) || 0),
@@ -192,19 +192,18 @@ function shortDate(value: string) {
 
 function normalizePropertyType(type: string) {
   const normalized = type.toLowerCase();
-  if (normalized.includes("student")) return "Student Housing";
-  if (normalized.includes("shared")) return "Shared Room";
-  if (normalized.includes("unique") || normalized.includes("cabin") || normalized.includes("riad")) return "Unique Stay";
+  if (normalized.includes("riad")) return "Riad";
   if (normalized.includes("villa")) return "Villa";
   if (normalized.includes("apartment")) return "Apartment";
+  if (normalized.includes("house")) return "House";
+  if (normalized.includes("resort")) return "Resort";
   return "Hotel";
 }
 
 function categoryDetail(label: string) {
+  if (label === "Riad") return "Courtyard stays close to the medina";
   if (label === "Apartment") return "Design-led city homes";
-  if (label === "Hotel") return "Operated stays with service";
   if (label === "Villa") return "Private premium homes";
-  if (label === "Student Housing") return "Verified monthly rooms";
-  if (label === "Shared Room") return "Social and affordable";
-  return "Rare places, safe operations";
+  if (label === "Hotel") return "Operated stays with service";
+  return "Verified places with clear rules";
 }

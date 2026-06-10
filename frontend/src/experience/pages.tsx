@@ -530,21 +530,45 @@ function PublicAuthActions({ mobile = false, onNavigate }: { mobile?: boolean; o
     navigate("/", { replace: true });
   };
 
+  if (hasSession && userQuery.isLoading) {
+    return (
+      <div className={cn(mobile ? "grid gap-2 pt-2" : "flex items-center gap-2")}>
+        <div className={cn("skeleton-line", mobile ? "h-12 w-full rounded-2xl" : "h-11 w-36 rounded-full")} />
+      </div>
+    );
+  }
+
   if (!isSignedIn) {
     return (
       <div className={cn(mobile ? "grid gap-2 sm:grid-cols-3" : "flex items-center gap-2")}>
         <LinkButton to="/login" variant="secondary" className={mobile ? "w-full" : undefined}>Log in</LinkButton>
-        <LinkButton to="/host/onboarding" variant="secondary" className={mobile ? "w-full" : undefined}><Plus className="h-4 w-4" /> List a rent</LinkButton>
+        <LinkButton to="/host/onboarding" variant="secondary" className={mobile ? "w-full" : undefined}><Plus className="h-4 w-4" /> Become a host</LinkButton>
         <LinkButton to="/register" className={mobile ? "w-full" : undefined}>Register</LinkButton>
       </div>
     );
   }
 
-  const menuItems = [
-    { label: "My Profile", href: role === "Host" ? "/host#settings" : "/dashboard#profile", icon: UserRound },
-    { label: "My Reservations", href: role === "Host" ? "/host#reservations" : "/reservations", icon: CalendarDays },
-    ...(role === "Host" ? [{ label: "Host Dashboard", href: "/host", icon: LayoutDashboard }] : []),
-  ];
+  const menuItems = role === "Admin"
+    ? [
+        { label: "Admin dashboard", href: "/admin", icon: LayoutDashboard },
+        { label: "Messages", href: "/messages", icon: MessageCircle },
+        { label: "Settings", href: "/admin#settings", icon: Settings }
+      ]
+    : role === "Host"
+      ? [
+          { label: "Host dashboard", href: "/host", icon: LayoutDashboard },
+          { label: "Reservations", href: "/host/reservations", icon: CalendarDays },
+          { label: "Calendar", href: "/host/calendar", icon: CalendarDays },
+          { label: "Messages", href: "/messages", icon: MessageCircle },
+          { label: "Settings", href: "/host/settings", icon: Settings }
+        ]
+      : [
+          { label: "Traveler dashboard", href: "/dashboard", icon: LayoutDashboard },
+          { label: "My reservations", href: "/reservations", icon: CalendarDays },
+          { label: "Wishlist", href: "/dashboard/wishlist", icon: Heart },
+          { label: "Messages", href: "/messages", icon: MessageCircle },
+          { label: "Profile", href: "/dashboard/profile", icon: UserRound }
+        ];
 
   if (mobile) {
     return (
@@ -671,7 +695,7 @@ function PublicNav() {
 
 function PublicFooter() {
   const groups = [
-    ["Marketplace", "Apartments", "Hotels", "Villas", "Student housing"],
+    ["Marketplace", "Riads", "Apartments", "Villas", "Hotels"],
     ["Company", "Trust", "Careers", "Press", "Accessibility"],
     ["Support", "Help center", "Safety center", "Cancellation", "Payments"]
   ];
@@ -724,9 +748,7 @@ function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: "ne
 
 function EmptyState({ icon, title, text, action }: { icon?: ReactNode; title: string; text?: string; action?: ReactNode }) {
   return (
-    <div className="relative overflow-hidden rounded-[2rem] border border-dashed border-line bg-surface/80 p-6 text-center shadow-soft">
-      <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-primary/10 blur-2xl" />
-      <div className="pointer-events-none absolute -bottom-12 left-8 h-28 w-28 rounded-full bg-accent/10 blur-2xl" />
+    <div className="relative overflow-hidden rounded-[2rem] border border-dashed border-line bg-gradient-to-b from-surface to-surface-2/70 p-6 text-center shadow-soft">
       <div className="relative mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/10">
         {icon || <Sparkles className="h-5 w-5" />}
       </div>
@@ -739,10 +761,21 @@ function EmptyState({ icon, title, text, action }: { icon?: ReactNode; title: st
 
 function LoadingBlock({ label = "Loading workspace data..." }: { label?: string }) {
   return (
-    <div className="premium-card grid min-h-40 place-items-center p-6">
+    <div className="premium-card overflow-hidden p-5">
       <div className="flex items-center gap-3 text-sm font-bold text-ink-soft">
-        <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-primary" />
-        {label}
+        <span className="grid h-9 w-9 place-items-center rounded-2xl bg-primary/10 text-primary">
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-primary" />
+        </span>
+        <span>{label}</span>
+      </div>
+      <div className="mt-5 grid gap-3">
+        <div className="skeleton-line h-4 w-2/3" />
+        <div className="skeleton-line h-4 w-5/6" />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="skeleton-line h-24 rounded-[1.25rem]" />
+          <div className="skeleton-line h-24 rounded-[1.25rem]" />
+          <div className="skeleton-line h-24 rounded-[1.25rem]" />
+        </div>
       </div>
     </div>
   );
@@ -752,7 +785,7 @@ function HumanNote({ children }: { children: ReactNode }) {
   return (
     <div className="rounded-[1.5rem] border border-line bg-surface/80 p-4 shadow-soft">
       <div className="flex gap-3 text-sm font-semibold leading-6 text-ink-soft">
-        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent/10 text-accent">✦</span>
+        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent/10 text-accent"><Sparkles className="h-3.5 w-3.5" /></span>
         <div>{children}</div>
       </div>
     </div>
@@ -774,8 +807,7 @@ function WorkspaceHero({
 }) {
   return (
     <section className="relative overflow-hidden rounded-[2.25rem] border border-line bg-gradient-to-br from-ink via-ink to-primary/80 p-5 text-canvas shadow-lift sm:p-6 lg:p-8">
-      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-accent/25 blur-3xl" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.1),transparent)]" />
       <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.22em] text-white/60">{kicker}</p>
@@ -794,7 +826,7 @@ function SectionHeader({ kicker, title, text, action }: { kicker: string; title:
     <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div>
         <p className="caption-type">{kicker}</p>
-        <h2 className="h2-type mt-3">{title}</h2>
+        <h2 className="mt-3 text-[clamp(1.55rem,2.4vw,2.65rem)] font-semibold leading-[1.04] tracking-[-0.055em] text-ink">{title}</h2>
         {text ? <p className="body-type mt-3 max-w-2xl">{text}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
@@ -804,10 +836,13 @@ function SectionHeader({ kicker, title, text, action }: { kicker: string; title:
 
 function SearchDock({ compact = false }: { compact?: boolean }) {
   const navigate = useNavigate();
-  const [destination, setDestination] = useState("Tokyo");
-  const [checkIn, setCheckIn] = useState("2026-06-18");
-  const [checkOut, setCheckOut] = useState("2026-06-22");
-  const [guests, setGuests] = useState("2");
+  const [params] = useSearchParams();
+  const defaultCheckIn = addDaysIso(todayIso(), 7);
+  const defaultCheckOut = addDaysIso(defaultCheckIn, 3);
+  const [destination, setDestination] = useState(params.get("destination") || "Marrakech");
+  const [checkIn, setCheckIn] = useState(params.get("checkIn") || defaultCheckIn);
+  const [checkOut, setCheckOut] = useState(params.get("checkOut") || defaultCheckOut);
+  const [guests, setGuests] = useState(params.get("guests") || "2");
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const query = new URLSearchParams({ destination, checkIn, checkOut, guests });
@@ -822,13 +857,13 @@ function SearchDock({ compact = false }: { compact?: boolean }) {
       )}
     >
       <FieldShell label="Destination" icon={<MapPin className="h-4 w-4" />}>
-        <input className="w-full bg-transparent text-sm font-bold outline-none" value={destination} onChange={(event) => setDestination(event.target.value)} />
+        <input className="w-full bg-transparent text-sm font-bold outline-none placeholder:text-muted" value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="Marrakech, Morocco" />
       </FieldShell>
       <FieldShell label="Check-in" icon={<CalendarDays className="h-4 w-4" />}>
-        <input className="w-full bg-transparent text-sm font-bold outline-none" type="date" value={checkIn} onChange={(event) => setCheckIn(event.target.value)} />
+        <input className="w-full bg-transparent text-sm font-bold outline-none" type="date" min={todayIso()} value={checkIn} onChange={(event) => setCheckIn(event.target.value)} />
       </FieldShell>
       <FieldShell label="Check-out" icon={<CalendarDays className="h-4 w-4" />}>
-        <input className="w-full bg-transparent text-sm font-bold outline-none" type="date" value={checkOut} onChange={(event) => setCheckOut(event.target.value)} />
+        <input className="w-full bg-transparent text-sm font-bold outline-none" type="date" min={addDaysIso(checkIn, 1)} value={checkOut} onChange={(event) => setCheckOut(event.target.value)} />
       </FieldShell>
       <FieldShell label="Guests" icon={<Users className="h-4 w-4" />}>
         <select className="w-full bg-transparent text-sm font-bold outline-none" value={guests} onChange={(event) => setGuests(event.target.value)}>
@@ -860,6 +895,9 @@ function FieldShell({ label, icon, children }: { label: string; icon: ReactNode;
 function PropertyCard({ property, featured = false }: { property: Property; featured?: boolean }) {
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
+  const detailPath = `/property/${property.id}`;
+  const ratingLabel = property.rating > 0 ? property.rating.toFixed(1) : "New";
+  const metadataTags = (property.tags.length ? property.tags : property.amenities).slice(0, 3);
   const saveFavorite = useMutation({
     mutationFn: () => addFavorite(property.id),
     onSuccess: async () => {
@@ -874,30 +912,34 @@ function PropertyCard({ property, featured = false }: { property: Property; feat
       whileHover={{ y: -5 }}
       transition={{ duration: 0.22, ease: easing }}
       className={cn(
-        "group min-w-0 overflow-hidden rounded-[1.75rem] border border-line bg-surface shadow-soft ring-1 ring-transparent transition hover:border-primary/25 hover:shadow-lift",
+        "group flex min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-line bg-surface shadow-soft ring-1 ring-white/60 transition hover:border-primary/30 hover:shadow-lift",
         featured && "lg:grid lg:grid-cols-[1.08fr_0.92fr]"
       )}
     >
-      <Link to={`/property/${property.id}`} className="relative block overflow-hidden bg-surface-2">
+      <Link to={detailPath} className="relative block overflow-hidden bg-surface-2">
         <img
           src={property.image}
           alt={property.title}
           className={cn("w-full object-cover transition duration-700 group-hover:scale-105", featured ? "aspect-[4/3] lg:h-full" : "aspect-[4/3]")}
         />
-        <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+        <div className="absolute inset-x-3 top-3 flex flex-wrap items-start justify-between gap-2">
           <Badge tone={property.verified ? "success" : "warning"}>{property.verified ? "Verified" : "Reviewing"}</Badge>
+          <Badge tone="primary">{property.type}</Badge>
         </div>
       </Link>
-      <div className="flex min-h-[250px] flex-col p-5">
+      <div className="flex min-h-[300px] flex-1 flex-col p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <Link to={`/property/${property.id}`} className="block truncate text-xl font-semibold tracking-[-0.04em] text-ink">
+            <Link to={detailPath} className="block truncate text-xl font-semibold tracking-[-0.04em] text-ink">
               {property.title}
             </Link>
-            <p className="mt-1 truncate text-sm font-semibold text-ink-soft">{property.neighborhood}, {property.city}</p>
+            <p className="mt-1 flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-ink-soft">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <span className="truncate">{property.neighborhood}, {property.city}</span>
+            </p>
           </div>
           <button
-            className={cn("shrink-0 rounded-full border border-line p-2 transition hover:bg-primary hover:text-primary-ink", saved ? "bg-primary text-primary-ink" : "text-ink-soft")}
+            className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line transition hover:bg-primary hover:text-primary-ink", saved ? "bg-primary text-primary-ink" : "text-ink-soft")}
             type="button"
             onClick={() => saveFavorite.mutate()}
             disabled={saveFavorite.isPending || saved}
@@ -907,23 +949,32 @@ function PropertyCard({ property, featured = false }: { property: Property; feat
           </button>
         </div>
         <p className="mt-4 line-clamp-2 text-sm leading-6 text-ink-soft">{property.description}</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {property.tags.slice(0, 3).map((tag) => (
-            <span key={tag} className="rounded-full bg-surface-2 px-3 py-1 text-xs font-bold text-ink-soft">{tag}</span>
+        <div className="mt-4 grid grid-cols-3 gap-2 rounded-[1.25rem] bg-surface-2 p-2 text-center text-[11px] font-black uppercase tracking-[0.12em] text-muted">
+          <span className="min-w-0 rounded-2xl bg-surface px-2 py-2"><Users className="mx-auto mb-1 h-3.5 w-3.5 text-primary" /><span className="block truncate">{property.guests} guests</span></span>
+          <span className="min-w-0 rounded-2xl bg-surface px-2 py-2"><BedDouble className="mx-auto mb-1 h-3.5 w-3.5 text-primary" /><span className="block truncate">{property.bedrooms} rooms</span></span>
+          <span className="min-w-0 rounded-2xl bg-surface px-2 py-2"><CalendarDays className="mx-auto mb-1 h-3.5 w-3.5 text-primary" /><span className="block truncate">{property.availability}</span></span>
+        </div>
+        <div className="mt-4 flex min-h-8 flex-wrap gap-2">
+          {metadataTags.map((tag) => (
+            <span key={tag} className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{tag}</span>
           ))}
         </div>
         <div className="mt-auto flex items-end justify-between gap-4 border-t border-line pt-4">
           <div>
-            <p className="text-2xl font-semibold tracking-[-0.05em] text-ink">${property.price}</p>
+            <p className="text-2xl font-semibold tracking-[-0.05em] text-ink">{currency(property.price)}</p>
             <p className="text-xs font-semibold text-muted">per night</p>
           </div>
           <div className="text-right">
             <p className="inline-flex items-center gap-1 text-sm font-bold text-ink">
               <Star className="h-4 w-4 fill-warning text-warning" />
-              {property.rating}
+              {ratingLabel}
             </p>
             <p className="text-xs font-semibold text-muted">{property.reviews} reviews</p>
           </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <LinkButton to={detailPath} variant="secondary" className="w-full px-3">View details</LinkButton>
+          <LinkButton to={detailPath} className="w-full px-3">Reserve now</LinkButton>
         </div>
       </div>
     </motion.article>
@@ -1063,7 +1114,7 @@ function DataTable<TData extends object>({ data, columns }: { data: TData[]; col
             ))}
           </thead>
           <tbody className="divide-y divide-line">
-            {table.getRowModel().rows.map((row) => (
+            {table.getRowModel().rows.length ? table.getRowModel().rows.map((row) => (
               <tr key={row.id} className="transition hover:bg-surface-2/70">
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id} className="px-4 py-4 font-semibold text-ink-soft">
@@ -1071,7 +1122,13 @@ function DataTable<TData extends object>({ data, columns }: { data: TData[]; col
                   </td>
                 ))}
               </tr>
-            ))}
+            )) : (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-10 text-center text-sm font-semibold text-muted">
+                  No records yet.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -1097,6 +1154,11 @@ function WorkspaceShell({
   const location = useLocation();
   const nav = navByRole[role];
   const roleLabel = role === "traveler" ? "Traveler" : role === "host" ? "Host" : "Admin";
+  const roleCopy = role === "traveler"
+    ? "Plan trips, track reservations, save places, message hosts, and keep payments in one organized space."
+    : role === "host"
+      ? "Manage listings, availability, guest requests, payouts, messages, and the details that make hosting calmer."
+      : "Monitor users, listings, payments, risk signals, support, and marketplace health from one control plane.";
 
   const queryClient = useQueryClient();
 
@@ -1130,7 +1192,7 @@ function WorkspaceShell({
           <BrandMark />
           <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-line bg-ink p-4 text-canvas shadow-soft">
             <p className="text-[11px] font-black uppercase tracking-[0.22em] text-white/55">{roleLabel} workspace</p>
-            <p className="mt-2 text-sm font-semibold leading-6 text-white/78">Your home base for guests, stays, messages, payments, and the little details that make hosting feel easy.</p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-white/78">{roleCopy}</p>
             {role === "host" ? (
               <LinkButton to="/host/onboarding" className="mt-4 w-full bg-white text-ink hover:shadow-lift">
                 <Plus className="h-4 w-4" /> Add your place
@@ -1276,19 +1338,19 @@ export function LandingPage() {
       <div className="min-h-screen overflow-x-hidden bg-canvas text-ink">
         <PublicNav />
 
-        <section className="relative overflow-hidden border-b border-line bg-[radial-gradient(circle_at_20%_10%,hsl(var(--primary)/0.16),transparent_32%),radial-gradient(circle_at_85%_18%,hsl(var(--accent)/0.16),transparent_28%)]">
+        <section className="relative overflow-hidden border-b border-line bg-gradient-to-b from-canvas via-surface-2/70 to-canvas">
           <div className="pointer-events-none absolute inset-0 subtle-grid opacity-50" />
           <div className="page-shell relative grid min-h-[calc(100vh-4.5rem)] items-center gap-10 py-10 lg:grid-cols-[minmax(0,1.03fr)_minmax(420px,0.97fr)] lg:py-16">
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-3">
-                <Badge tone="primary"><Sparkles className="h-3.5 w-3.5" /> Designed for safer stays</Badge>
-                <span className="rounded-full border border-line bg-surface/80 px-3 py-1 text-xs font-bold text-ink-soft shadow-soft">Travelers · hosts · operations</span>
+                <Badge tone="primary"><Sparkles className="h-3.5 w-3.5" /> Marrakech stays, verified</Badge>
+                <span className="rounded-full border border-line bg-surface/80 px-3 py-1 text-xs font-bold text-ink-soft shadow-soft">Travelers / hosts / operations</span>
               </div>
               <h1 className="mt-6 max-w-5xl text-[clamp(3.1rem,8vw,6.7rem)] font-semibold leading-[0.9] tracking-[-0.085em] text-ink">
-                Book stays that feel right before you arrive.
+                Book beautiful stays in Marrakech and across Morocco.
               </h1>
               <p className="mt-6 max-w-2xl text-base font-medium leading-8 text-ink-soft sm:text-lg">
-                UBOOK blends verified stays, transparent pricing, host messaging, and traveler workspaces into one calm booking experience.
+                Find riads, apartments, villas, and hotels with verified hosts, transparent pricing, live availability, and a traveler workspace that keeps every stay organized.
               </p>
               <div className="mt-8 min-w-0 rounded-[2.25rem] border border-line bg-surface/70 p-2 shadow-lift backdrop-blur-2xl">
                 <SearchDock />
@@ -1342,7 +1404,7 @@ export function LandingPage() {
                       <img src={property.image} alt={property.title} className="aspect-[4/3] w-full rounded-[1.25rem] object-cover transition duration-500 group-hover:scale-[1.03]" />
                       <div className="p-2">
                         <p className="truncate text-sm font-black text-ink">{property.title}</p>
-                        <p className="mt-1 text-xs font-bold text-muted">${property.price}/night · {property.rating} ★</p>
+                          <p className="mt-1 text-xs font-bold text-muted">{currency(property.price)}/night / {property.rating.toFixed(1)} rating</p>
                       </div>
                     </Link>
                   )) : (
@@ -1378,8 +1440,8 @@ export function LandingPage() {
         <section className="content-shell py-16">
           <SectionHeader
             kicker="Explore by trip style"
-            title="A marketplace that adapts to the reason you’re traveling."
-            text="Short stay, family trip, student housing, business visit, or resort escape — each category gets clear context instead of a generic grid."
+            title="Riads, apartments, villas, and hotels with context."
+            text="Medina weekend, family villa, business stay, or serviced hotel visit: UBOOK makes each option easy to compare before a reservation."
             action={<LinkButton to="/search" variant="secondary">Browse stays <ArrowRight className="h-4 w-4" /></LinkButton>}
           />
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1409,10 +1471,10 @@ export function LandingPage() {
             <div>
               <p className="caption-type">How it feels</p>
               <h2 className="h2-type mt-3">From search to check-in, every step has a reason.</h2>
-              <p className="body-type mt-4">The landing page should sell confidence, not just inventory. UBOOK’s flow keeps the emotional decision simple: see trust, understand price, book clearly.</p>
+              <p className="body-type mt-4">UBOOK keeps the emotional decision simple: understand the location, scan trust signals, review the total, and reserve with a clear next step.</p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <LinkButton to="/search">Start exploring</LinkButton>
-                <LinkButton to="/host/onboarding" variant="secondary"><Plus className="h-4 w-4" /> Add a rent announcement</LinkButton>
+                <LinkButton to="/host/onboarding" variant="secondary"><Plus className="h-4 w-4" /> Start hosting</LinkButton>
               </div>
             </div>
             <div className="grid gap-4">
@@ -1430,7 +1492,7 @@ export function LandingPage() {
         </section>
 
         <section className="content-shell py-16">
-          <SectionHeader kicker="Featured stays" title="A visual grid that helps people decide faster." />
+          <SectionHeader kicker="Featured stays" title="A premium grid for faster booking decisions." />
           {featured.length ? (
             <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {featured.map((property, index) => <PropertyCard key={property.id} property={property} featured={index === 0} />)}
@@ -1447,9 +1509,9 @@ export function LandingPage() {
             <div className="relative grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-white/55">For hosts</p>
-                <h2 className="mt-3 text-4xl font-semibold tracking-[-0.07em] text-white lg:text-5xl">Turn an empty place into a trusted rent announcement.</h2>
+                <h2 className="mt-3 text-4xl font-semibold tracking-[-0.07em] text-white lg:text-5xl">Start hosting on UBOOK with a listing guests can trust.</h2>
                 <p className="mt-4 text-sm font-medium leading-7 text-white/70">Give hosts a clear path: create a listing, manage bookings, message travelers, and see revenue from one workspace.</p>
-                <LinkButton to="/host/onboarding" className="mt-6 bg-white text-ink hover:shadow-lift"><Plus className="h-4 w-4" /> Add rent announcement</LinkButton>
+                <LinkButton to="/host/onboarding" className="mt-6 bg-white text-ink hover:shadow-lift"><Plus className="h-4 w-4" /> Create your first property</LinkButton>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 {["Smart listing setup", "Availability calendar", "Protected payouts", "Guest messages"].map((item) => (
@@ -1505,7 +1567,7 @@ function AuthShell({ mode }: { mode: "login" | "register" | "forgot" | "verify" 
   const [recoveryCode, setRecoveryCode] = useState("");
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
 
-  const signupSecurityRedirect = role === "Host" ? "/host#settings" : "/dashboard#profile";
+  const signupSecurityRedirect = role === "Host" ? "/host/settings" : "/dashboard/profile";
   const defaultRedirect = mode === "register" ? signupSecurityRedirect : "/dashboard";
   const redirectTo = safeRedirectPath(searchParams.get("redirectTo") || searchParams.get("redirect") || (location.state as { from?: string } | null)?.from, defaultRedirect);
 
@@ -1812,7 +1874,7 @@ function AuthShell({ mode }: { mode: "login" | "register" | "forgot" | "verify" 
                       </Button>
                     </div>
                     <p className="text-xs font-semibold leading-5 text-muted">
-                      Google and Microsoft signups create a traveler account. You can open host tools after signing in.
+                      Google and Microsoft signups create a traveler account. Host tools are available after signing in.
                     </p>
                   </>
                 ) : null}
@@ -1848,7 +1910,7 @@ function AuthShell({ mode }: { mode: "login" | "register" | "forgot" | "verify" 
           <div className="absolute inset-0 bg-hero-wash" />
           <div className="absolute bottom-10 left-10 right-10 rounded-[2rem] border border-white/20 bg-white/12 p-8 text-white backdrop-blur-xl">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/70">Secure by design</p>
-            <h2 className="mt-4 text-4xl font-semibold tracking-[-0.06em]">One identity for bookings, hosting, payments, and trust operations.</h2>
+            <h2 className="mt-4 text-4xl font-semibold tracking-[-0.06em]">One secure identity for bookings, hosting, payments, and trust operations.</h2>
           </div>
         </div>
       </div>
@@ -2001,7 +2063,7 @@ export function SearchResults() {
                 <div>
                   <p className="caption-type">Property discovery</p>
                   <h1 className="h2-type mt-2">{destination ? `Stays in ${destination}` : "Explore verified stays"}</h1>
-                  <p className="body-type mt-3">{results.length} announcements shown as a clean grid. Click any stay to open its full details.</p>
+                  <p className="body-type mt-3">{results.length} stays shown as a clean grid. Compare price, capacity, availability, and trust signals before opening a listing.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant={savedSearch ? "primary" : "secondary"} onClick={() => saveSearch.mutate()} disabled={saveSearch.isPending}><Bell className="h-4 w-4" /> {savedSearch ? "Saved" : "Save search"}</Button>
@@ -2009,7 +2071,7 @@ export function SearchResults() {
               </div>
               <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap gap-2">
-                  {["Instant results", "Map-ready", "Safe payments", "Student friendly"].map((item) => <Badge key={item} tone="accent">{item}</Badge>)}
+                  {["Instant results", "Map-ready", "Safe payments", "Morocco-ready"].map((item) => <Badge key={item} tone="accent">{item}</Badge>)}
                 </div>
                 <select className="input-control max-w-[220px]" value={sort} onChange={(event) => setSort(event.target.value)}>
                   <option>Recommended</option>
@@ -2017,7 +2079,7 @@ export function SearchResults() {
                   <option>Rating</option>
                 </select>
               </div>
-              <div className="mt-6 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+              <div className="mt-6 grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {query.isLoading ? (
                   Array.from({ length: 12 }).map((_, index) => (
                     <div key={index} className="min-h-[360px] animate-pulse rounded-[1.75rem] border border-line bg-surface/70 shadow-soft" />
@@ -2025,7 +2087,7 @@ export function SearchResults() {
                 ) : results.length ? (
                   results.map((property) => <PropertyCard key={property.id} property={property} />)
                 ) : (
-                  <div className="sm:col-span-2 lg:col-span-3 xl:col-span-4 2xl:col-span-6">
+                  <div className="sm:col-span-2 xl:col-span-3 2xl:col-span-4">
                     <EmptyState
                       icon={<Search className="h-5 w-5" />}
                       title="No announcements found"
@@ -2161,6 +2223,8 @@ export function PropertyDetails() {
   const fees = Math.round((pricingQuery.data?.serviceFee ?? property.price * nights * 0.18) + (pricingQuery.data?.cityTax ?? 0));
   const total = Math.round(pricingQuery.data?.total ?? property.price * nights + fees);
   const similar = (similarQuery.data ?? []).map(toExperienceProperty).filter((item) => item.id !== property.id).slice(0, 3);
+  const galleryImages = [...new Set([property.image, ...property.gallery])].slice(0, 5);
+  const reviews = apiProperty.reviews || [];
   const bookingScrollStage = bookingScrollY > 820 ? "deep" : bookingScrollY > 240 ? "compact" : "hero";
   const bookingCardCompact = bookingScrollStage !== "hero";
   const bookingCardDeep = bookingScrollStage === "deep";
@@ -2186,7 +2250,10 @@ export function PropertyDetails() {
         <main className={cn("page-shell py-8 transition-[padding] duration-500 ease-premium", bookingPanelOpen && (bookingCardDeep ? "xl:pr-[350px]" : bookingCardCompact ? "xl:pr-[390px]" : "xl:pr-[430px]"))}>
           <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <Badge tone="success"><BadgeCheck className="h-3.5 w-3.5" /> Verified stay</Badge>
+              <div className="flex flex-wrap gap-2">
+                <Badge tone="success"><BadgeCheck className="h-3.5 w-3.5" /> Verified stay</Badge>
+                <Badge tone="primary">{property.type}</Badge>
+              </div>
               <h1 className="h1-type mt-4 max-w-5xl">{property.title}</h1>
               <p className="mt-3 flex flex-wrap items-center gap-3 text-sm font-bold text-ink-soft">
                 <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4 text-primary" /> {property.neighborhood}, {property.city}</span>
@@ -2199,7 +2266,7 @@ export function PropertyDetails() {
           <section className="grid gap-3 overflow-hidden rounded-[2rem] md:grid-cols-[1.3fr_0.7fr]">
             <img src={property.image} alt={property.title} className="aspect-[16/10] h-full w-full object-cover" />
             <div className="grid grid-cols-2 gap-3">
-              {property.gallery.slice(0, 4).map((image) => <img key={image} src={image} alt={property.title} className="h-full min-h-40 w-full rounded-[1.25rem] object-cover" />)}
+              {galleryImages.slice(1, 5).map((image) => <img key={image} src={image} alt={property.title} className="h-full min-h-40 w-full rounded-[1.25rem] object-cover" />)}
             </div>
           </section>
           <div className="mt-8 grid min-w-0 gap-8">
@@ -2209,7 +2276,7 @@ export function PropertyDetails() {
                   <div>
                     <h2 className="h3-type">Hosted by {property.host}</h2>
                     <p className="mt-2 text-sm font-semibold text-ink-soft">Host since {property.hostSince} / identity and payout verified</p>
-                    {property.hostId ? <Link to={`/hosts/${property.hostId}`} className="mt-3 inline-flex text-sm font-black text-primary">View host profile and apartments</Link> : null}
+                    {property.hostId ? <Link to={`/hosts/${property.hostId}`} className="mt-3 inline-flex text-sm font-black text-primary">View host profile and properties</Link> : null}
                   </div>
                   {property.hostId ? (
                     <Link to={`/hosts/${property.hostId}`} className="shrink-0">
@@ -2224,7 +2291,7 @@ export function PropertyDetails() {
               <article className="premium-card p-6">
                 <SectionHeader kicker="Amenities" title="Everything important is visible before payment." />
                 <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {property.amenities.map((amenity) => <div key={amenity} className="rounded-2xl bg-surface-2 p-4 text-sm font-bold text-ink-soft">{amenity}</div>)}
+                  {property.amenities.length ? property.amenities.map((amenity) => <div key={amenity} className="rounded-2xl bg-surface-2 p-4 text-sm font-bold text-ink-soft">{amenity}</div>) : <EmptyState title="Amenities coming soon" text="The host has not added amenity details yet." />}
                 </div>
               </article>
               <article className="premium-card p-6">
@@ -2258,9 +2325,9 @@ export function PropertyDetails() {
                 </div>
               </article>
               <article className="premium-card p-6">
-                <SectionHeader kicker="Reviews" title="All apartment reviews." />
+                <SectionHeader kicker="Reviews" title="All property reviews." />
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  {apiProperty.reviews.length ? apiProperty.reviews.map((item) => (
+                  {reviews.length ? reviews.map((item) => (
                     <div key={item.id} className="rounded-[1.25rem] bg-surface-2 p-5">
                       <div className="flex items-center justify-between gap-3">
                         <Badge tone="success">{item.rating} stars</Badge>
@@ -2269,7 +2336,7 @@ export function PropertyDetails() {
                       <p className="text-sm leading-6 text-ink-soft">"{item.comment}"</p>
                       <p className="mt-4 font-bold text-ink">{item.author}</p>
                     </div>
-                  )) : <EmptyState title="No apartment reviews yet" text="Verified guest reviews will appear here after completed stays." />}
+                  )) : <EmptyState title="No property reviews yet" text="Verified guest reviews will appear here after completed stays." />}
                 </div>
               </article>
               <article className="premium-card p-6">
@@ -2589,7 +2656,7 @@ export function HostProfilePage() {
                   <div>
                     <h1 className="h1-type">{hostName}</h1>
                     <p className="mt-2 text-sm font-bold text-ink-soft">
-                      Host since {profile.host.createdAt ? formatFriendlyDate(profile.host.createdAt.slice(0, 10)) : "recently"} / {profile.stats.listingCount} apartments
+                      Host since {profile.host.createdAt ? formatFriendlyDate(profile.host.createdAt.slice(0, 10)) : "recently"} / {profile.stats.listingCount} properties
                     </p>
                   </div>
                 </div>
@@ -2598,23 +2665,23 @@ export function HostProfilePage() {
               <div className="grid gap-3 rounded-[1.5rem] bg-surface-2 p-4">
                 <LineItem label="Host rating" value={`${profile.profile.averageRating || 0} / 5`} />
                 <LineItem label="Host reviews" value={`${profile.stats.hostReviewCount}`} />
-                <LineItem label="Apartment reviews" value={`${profile.stats.propertyReviewCount}`} />
+                <LineItem label="Property reviews" value={`${profile.stats.propertyReviewCount}`} />
                 <LineItem label="Response rate" value={`${Math.round(profile.profile.responseRate || 0)}%`} strong />
               </div>
             </div>
           </section>
 
           <section className="mt-10">
-            <SectionHeader kicker="Apartments" title={`${hostName}'s apartments.`} text="Every active listing owned by this host, with live pricing and review signals." />
+            <SectionHeader kicker="Properties" title={`${hostName}'s properties.`} text="Every active listing owned by this host, with live pricing and review signals." />
             <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {listings.length ? listings.map((property) => <PropertyCard key={property.id} property={property} />) : <EmptyState title="No public apartments" text="This host does not have active public listings right now." />}
+              {listings.length ? listings.map((property) => <PropertyCard key={property.id} property={property} />) : <EmptyState title="No public properties" text="This host does not have active public listings right now." />}
             </div>
           </section>
 
           <section className="mt-10">
             <div className="premium-card p-5">
-              <SectionHeader kicker="All reviews" title="Host and apartment feedback in one place." text="Each completed stay can create one combined review covering both the apartment and the host." />
-              <ReviewList reviews={allReviews} showProperty emptyTitle="No reviews yet" emptyText="Verified host and apartment reviews appear here after completed stays." />
+              <SectionHeader kicker="All reviews" title="Host and property feedback in one place." text="Each completed stay can create one combined review covering both the property and the host." />
+              <ReviewList reviews={allReviews} showProperty emptyTitle="No reviews yet" emptyText="Verified host and property reviews appear here after completed stays." />
             </div>
           </section>
         </main>
@@ -2802,7 +2869,7 @@ export function UserDashboard() {
   const spendingData = toChartData((dashboard?.bookingHistory || []).map((booking) => ({ date: String(booking.payload?.checkIn || new Date().toISOString()), revenue: booking.total })));
   const quickLinks = [
     { title: "Reservations", text: `${dashboard?.upcomingTrips?.length || 0} upcoming trips`, href: "/reservations", icon: CalendarDays },
-    { title: "Wishlist", text: `${favoritesQuery.data?.length || 0} saved apartments`, href: "/dashboard/wishlist", icon: Heart },
+    { title: "Wishlist", text: `${favoritesQuery.data?.length || 0} saved stays`, href: "/dashboard/wishlist", icon: Heart },
     { title: "Payments", text: `${currency((dashboard?.bookingHistory || []).reduce((sum, booking) => sum + booking.total, 0))} lifetime spend`, href: "/dashboard/payments", icon: CreditCard },
     { title: "Profile", text: userQuery.data?.otpEnabled ? "2FA enabled" : "Security setup available", href: "/dashboard/profile", icon: UserRound }
   ];
@@ -2833,7 +2900,7 @@ export function UserDashboard() {
           <SectionHeader kicker="Upcoming trips" title="Beautiful trip cards with next actions." action={<LinkButton to="/reservations" variant="secondary">Open reservations</LinkButton>} />
           <div className="mt-5 grid gap-4">
             {(dashboard?.upcomingTrips || []).slice(0, 2).map((booking, index) => <TripCard key={booking.id} booking={booking} index={index} />)}
-            {!(dashboard?.upcomingTrips || []).length ? <EmptyState title="No upcoming trips" text="Your accepted and pending reservations will appear in the Reservations page." action={<LinkButton to="/search">Find an apartment</LinkButton>} /> : null}
+            {!(dashboard?.upcomingTrips || []).length ? <EmptyState title="No upcoming trips" text="Your accepted and pending reservations will appear in the Reservations page." action={<LinkButton to="/search">Find a stay</LinkButton>} /> : null}
           </div>
         </div>
         <div className="premium-card p-5">
@@ -2879,14 +2946,14 @@ export function TravelerWishlistPage() {
   const savedSearches = savedSearchesQuery.data || [];
 
   return (
-    <WorkspaceShell role="traveler" title="Wishlist" subtitle="Saved apartments and searches stay together so you can return to the exact trip you were planning." action={<LinkButton to="/search"><Search className="h-4 w-4" /> Search stays</LinkButton>}>
+    <WorkspaceShell role="traveler" title="Wishlist" subtitle="Saved stays and searches stay together so you can return to the exact trip you were planning." action={<LinkButton to="/search"><Search className="h-4 w-4" /> Search stays</LinkButton>}>
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div>
-          <SectionHeader kicker="Saved apartments" title="Places you want to compare." />
+          <SectionHeader kicker="Saved stays" title="Places you want to compare." />
           <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {favorites.length ? favorites.map((property) => <PropertyCard key={property.id} property={property} />) : (
               <div className="md:col-span-2 xl:col-span-3">
-                <EmptyState icon={<Heart className="h-5 w-5" />} title="No saved apartments yet" text="Browse listings and save the apartments you want to compare before booking." action={<LinkButton to="/search">Browse apartments</LinkButton>} />
+                <EmptyState icon={<Heart className="h-5 w-5" />} title="No saved stays yet" text="Browse listings and save the places you want to compare before booking." action={<LinkButton to="/search">Browse stays</LinkButton>} />
               </div>
             )}
           </div>
@@ -2955,7 +3022,7 @@ export function TravelerPaymentsPage() {
                 <p className="text-lg font-semibold text-ink">{currency(payment.amount)}</p>
               </div>
             </div>
-          )) : <EmptyState icon={<Receipt className="h-5 w-5" />} title="No transactions yet" text="Payments will appear here after you book an apartment." />}
+          )) : <EmptyState icon={<Receipt className="h-5 w-5" />} title="No transactions yet" text="Payments will appear here after you book a stay." />}
         </div>
       </section>
     </WorkspaceShell>
@@ -2970,20 +3037,20 @@ export function TravelerReviewsPage() {
   const travelerReviews = (center?.travelerReviews || []).map((review) => ({ ...review, author: review.author || "Host feedback", propertyTitle: "Traveler review" }));
 
   return (
-    <WorkspaceShell role="traveler" title="Reviews" subtitle="Your apartment reviews, host feedback, and traveler reputation stay in one review center." action={<LinkButton to="/reservations" variant="secondary">Review completed stays</LinkButton>}>
+    <WorkspaceShell role="traveler" title="Reviews" subtitle="Your property reviews, host feedback, and traveler reputation stay in one review center." action={<LinkButton to="/reservations" variant="secondary">Review completed stays</LinkButton>}>
       <section className="grid gap-4 md:grid-cols-3">
         <MetricCard metric={{ label: "Average rating", value: String(center?.averageRating || 0), delta: "Across your review center", tone: "success" }} />
-        <MetricCard metric={{ label: "Total reviews", value: String(center?.totalReviews || 0), delta: "Apartment, host, and traveler reviews", tone: "primary" }} />
-        <MetricCard metric={{ label: "Review rule", value: "1 per stay", delta: "Apartment and host reviewed together", tone: "accent" }} />
+        <MetricCard metric={{ label: "Total reviews", value: String(center?.totalReviews || 0), delta: "Property, host, and traveler reviews", tone: "primary" }} />
+        <MetricCard metric={{ label: "Review rule", value: "1 per stay", delta: "Property and host reviewed together", tone: "accent" }} />
       </section>
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="premium-card p-5">
-          <SectionHeader kicker="Apartment reviews" title="What you wrote about stays." />
-          <ReviewList reviews={apartmentReviews} showProperty emptyTitle="No apartment reviews yet" emptyText="Completed stays can be reviewed from My Reservations." />
+          <SectionHeader kicker="Property reviews" title="What you wrote about stays." />
+          <ReviewList reviews={apartmentReviews} showProperty emptyTitle="No property reviews yet" emptyText="Completed stays can be reviewed from My Reservations." />
         </div>
         <div className="premium-card p-5">
           <SectionHeader kicker="Host reviews" title="What you wrote about hosts." />
-          <ReviewList reviews={hostReviews} showProperty emptyTitle="No host reviews yet" emptyText="A stay review covers both the apartment and the host." />
+          <ReviewList reviews={hostReviews} showProperty emptyTitle="No host reviews yet" emptyText="A stay review covers both the property and the host." />
         </div>
       </section>
       <section className="premium-card p-5">
@@ -3312,7 +3379,7 @@ function ReservationCard({
     onSuccess: async () => {
       setPropertyComment("");
       setHostComment("");
-      setReviewMessage("Apartment and host review submitted.");
+      setReviewMessage("Property and host review submitted.");
       setReviewError("");
       await queryClient.invalidateQueries({ queryKey: ["my-reservations"] });
       await queryClient.invalidateQueries({ queryKey: ["traveler-dashboard"] });
@@ -3328,7 +3395,7 @@ function ReservationCard({
   const submitStayReview = (event: FormEvent) => {
     event.preventDefault();
     if (propertyComment.trim().length < 3) {
-      setReviewError("Write at least 3 characters for the apartment review.");
+      setReviewError("Write at least 3 characters for the property review.");
       return;
     }
     if (hostComment.trim().length < 3) {
@@ -3375,7 +3442,7 @@ function ReservationCard({
         <form className="mt-5 grid gap-4 border-t border-line pt-5" onSubmit={submitStayReview}>
           <div className="grid gap-4 xl:grid-cols-2">
             <ReviewComposer
-              title="Review the apartment"
+              title="Review the property"
               rating={propertyRating}
               comment={propertyComment}
               submitting={stayReview.isPending}
@@ -3393,7 +3460,7 @@ function ReservationCard({
             />
           </div>
           <Button type="submit" className="w-full" disabled={stayReview.isPending || !booking.hostId}>
-            <Star className="h-4 w-4" /> {stayReview.isPending ? "Submitting..." : "Submit apartment and host review"}
+            <Star className="h-4 w-4" /> {stayReview.isPending ? "Submitting..." : "Submit property and host review"}
           </Button>
           {(reviewMessage || reviewError) ? (
             <div className={cn("rounded-2xl p-3 text-sm font-semibold", reviewError ? "bg-error/10 text-error" : "bg-success/10 text-success")}>
@@ -3473,9 +3540,9 @@ function InsightPanel({ title, items }: { title: string; items: string[] }) {
 
 function StatusRow({ label, tone = "neutral" }: { label: string; tone?: "success" | "warning" | "neutral" | "error" }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl bg-surface-2 p-4">
-      <span className="font-bold text-ink">{label}</span>
-      <Badge tone={tone}>{tone === "success" ? "Complete" : tone === "error" ? "Blocked" : tone === "warning" ? "Review" : "Ready"}</Badge>
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-surface-2 p-4">
+      <span className="min-w-0 break-words font-bold text-ink">{label}</span>
+      <span className="shrink-0"><Badge tone={tone}>{tone === "success" ? "Complete" : tone === "error" ? "Blocked" : tone === "warning" ? "Review" : "Ready"}</Badge></span>
     </div>
   );
 }
@@ -3898,9 +3965,10 @@ function PaymentStep({ property }: { property: Property }) {
             <CreditCard className="h-5 w-5 text-primary" />
             <p className="font-bold text-ink">Secure manual payment</p>
           </div>
+          <p className="mt-2 text-sm font-semibold leading-6 text-ink-soft">For the demo flow, UBOOK records a manual payment reference and keeps the reservation pending until the host accepts it.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <input className="input-control" aria-label="Payment reference" />
-            <input className="input-control" aria-label="Billing ZIP" />
+            <input className="input-control" aria-label="Payment reference" placeholder="Payment reference" />
+            <input className="input-control" aria-label="Billing postal code" placeholder="Billing postal code" />
           </div>
         </div>
       </div>
@@ -3945,6 +4013,19 @@ function ConfirmationStep({
         <LineItem label="Check-out" value={formatFriendlyDate(booking?.checkOut || tripDetails.checkOut)} />
         <LineItem label="Nights" value={`${booking?.nights || nights}`} />
         <LineItem label="Total" value={currency(booking?.total || total)} strong />
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        {[
+          ["1", "Host reviews your request", "The host sees your reservation in their dashboard immediately."],
+          ["2", "Message if needed", "Use the conversation thread for arrival questions or special requests."],
+          ["3", "Track status", "Your reservation page shows pending, confirmed, cancelled, checked-in, or checked-out."]
+        ].map(([number, title, text]) => (
+          <div key={title} className="rounded-[1.25rem] border border-line bg-surface p-4 shadow-soft">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/10 text-sm font-black text-primary">{number}</span>
+            <p className="mt-4 font-black text-ink">{title}</p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-ink-soft">{text}</p>
+          </div>
+        ))}
       </div>
       <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
         {conversationId ? <LinkButton to={`/messages?conversation=${conversationId}`}><MessageCircle className="h-4 w-4" /> Open conversation</LinkButton> : null}
@@ -4196,14 +4277,14 @@ export function HostListingsPage() {
   const { dashboardQuery, listings } = useHostWorkspaceData();
 
   return (
-    <WorkspaceShell role="host" title="Listings" subtitle="Every apartment you own, with clear status, pricing, photos, and quick access to the public listing." action={<LinkButton to="/host/onboarding"><Plus className="h-4 w-4" /> Add apartment</LinkButton>}>
-      {dashboardQuery.isLoading ? <LoadingBlock label="Loading your apartments..." /> : (
+    <WorkspaceShell role="host" title="Listings" subtitle="Every property you own, with clear status, pricing, photos, and quick access to the public listing." action={<LinkButton to="/host/onboarding"><Plus className="h-4 w-4" /> Add property</LinkButton>}>
+      {dashboardQuery.isLoading ? <LoadingBlock label="Loading your properties..." /> : (
         <>
           <WorkspaceHero
             kicker="Listing portfolio"
-            title="Your apartments need to feel easy to scan and easy to trust."
-            text="Use the onboarding flow to add better photos, accurate capacity, pricing, amenities, and location context for each apartment."
-            action={<LinkButton to="/host/onboarding" className="bg-white text-ink hover:bg-white hover:text-ink"><Plus className="h-4 w-4" /> Add apartment</LinkButton>}
+            title="Your properties need to feel easy to scan and easy to trust."
+            text="Use the onboarding flow to add better photos, accurate capacity, pricing, amenities, and location context for each property."
+            action={<LinkButton to="/host/onboarding" className="bg-white text-ink hover:bg-white hover:text-ink"><Plus className="h-4 w-4" /> Add property</LinkButton>}
           >
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-[1.35rem] border border-white/10 bg-white/10 p-4 text-white backdrop-blur">
@@ -4221,11 +4302,11 @@ export function HostListingsPage() {
             </div>
           </WorkspaceHero>
           <section>
-            <SectionHeader kicker="Your apartments" title="Manage each announcement separately." />
+            <SectionHeader kicker="Your properties" title="Manage each announcement separately." />
             <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {listings.length ? listings.map((property) => <PropertyCard key={property.id} property={property} />) : (
                 <div className="md:col-span-2 xl:col-span-3">
-                  <EmptyState icon={<Building2 className="h-5 w-5" />} title="No apartments yet" text="Start the guided onboarding to add photos, price, location, amenities, and calendar rules." action={<LinkButton to="/host/onboarding"><Plus className="h-4 w-4" /> Add your first apartment</LinkButton>} />
+                  <EmptyState icon={<Building2 className="h-5 w-5" />} title="No properties yet" text="Start the guided onboarding to add photos, price, location, amenities, and calendar rules." action={<LinkButton to="/host/onboarding"><Plus className="h-4 w-4" /> Add your first property</LinkButton>} />
                 </div>
               )}
             </div>
@@ -4250,12 +4331,12 @@ export function HostReservationsPage() {
   return (
     <WorkspaceShell role="host" title="Reservations" subtitle="Accept, reject, complete, and message guests from one host-owned reservation queue." action={<LinkButton to="/host/calendar" variant="secondary">Open calendar</LinkButton>}>
       <section className="grid gap-4 md:grid-cols-3">
-        <MetricCard metric={{ label: "Total reservations", value: String(reservations.length), delta: "For your apartments only", tone: "primary" }} />
+        <MetricCard metric={{ label: "Total reservations", value: String(reservations.length), delta: "For your properties only", tone: "primary" }} />
         <MetricCard metric={{ label: "Need decision", value: String(pendingCount), delta: "Pending host acceptance", tone: pendingCount ? "warning" : "success" }} />
         <MetricCard metric={{ label: "Confirmed revenue", value: currency(reservations.filter((reservation) => String(reservation.statusRaw || reservation.status).toLowerCase() === "confirmed").reduce((sum, reservation) => sum + reservation.total, 0)), delta: "Accepted reservations", tone: "success" }} />
       </section>
       <section className="premium-card p-5">
-        <SectionHeader kicker="Reservation queue" title="See price, dates, guest, and acceptance status." text="Accepting a reservation blocks those apartment dates on the host and guest calendars." />
+        <SectionHeader kicker="Reservation queue" title="See price, dates, guest, and acceptance status." text="Accepting a reservation blocks those property dates on the host and guest calendars." />
         <div className="mt-5">
           {hostReservationsQuery.isLoading ? <LoadingBlock label="Loading reservations..." /> : null}
           {hostReservationError ? <div className="mb-4 rounded-2xl bg-error/10 p-4 text-sm font-semibold text-error">{hostReservationError}</div> : null}
@@ -4292,7 +4373,7 @@ export function HostCalendarPage() {
   }, [listings, selectedCalendarPropertyId]);
 
   return (
-    <WorkspaceShell role="host" title="Calendar" subtitle="Each apartment has its own calendar. Accepted reservations are highlighted and block the same dates for guests." action={<LinkButton to="/host/reservations" variant="secondary">Reservations</LinkButton>}>
+    <WorkspaceShell role="host" title="Calendar" subtitle="Each property has its own calendar. Accepted reservations are highlighted and block the same dates for guests." action={<LinkButton to="/host/reservations" variant="secondary">Reservations</LinkButton>}>
       {dashboardQuery.isLoading ? <LoadingBlock label="Loading calendar data..." /> : listings.length ? (
         <>
           {hostReservationError ? <div className="rounded-2xl bg-error/10 p-4 text-sm font-semibold text-error">{hostReservationError}</div> : null}
@@ -4307,7 +4388,7 @@ export function HostCalendarPage() {
             onOpenConversation={(booking) => openReservationConversation.mutate(booking)}
           />
         </>
-      ) : <EmptyState icon={<CalendarDays className="h-5 w-5" />} title="No apartment calendar yet" text="Create an apartment first, then its own backend-backed calendar appears here." action={<LinkButton to="/host/onboarding"><Plus className="h-4 w-4" /> Add apartment</LinkButton>} />}
+      ) : <EmptyState icon={<CalendarDays className="h-5 w-5" />} title="No property calendar yet" text="Create a property first, then its own backend-backed calendar appears here." action={<LinkButton to="/host/onboarding"><Plus className="h-4 w-4" /> Add property</LinkButton>} />}
     </WorkspaceShell>
   );
 }
@@ -4317,7 +4398,7 @@ export function HostEarningsPage() {
   const confirmedRevenue = reservations.filter((reservation) => String(reservation.statusRaw || reservation.status).toLowerCase() === "confirmed").reduce((sum, reservation) => sum + reservation.total, 0);
 
   return (
-    <WorkspaceShell role="host" title="Earnings" subtitle="Revenue, occupancy, payout readiness, and accepted reservation value for your apartments.">
+    <WorkspaceShell role="host" title="Earnings" subtitle="Revenue, occupancy, payout readiness, and accepted reservation value for your properties.">
       {dashboardQuery.isLoading ? <LoadingBlock label="Loading earnings..." /> : (
         <>
           <section className="grid gap-4 md:grid-cols-4">
@@ -4339,11 +4420,11 @@ export function HostReviewsPage() {
   const reviews = (dashboard?.recentReviews || []).map((review) => ({ ...review, author: review.author || "Verified guest" }));
 
   return (
-    <WorkspaceShell role="host" title="Reviews" subtitle="Recent apartment and host feedback from travelers after completed stays.">
+    <WorkspaceShell role="host" title="Reviews" subtitle="Recent property and host feedback from travelers after completed stays.">
       {dashboardQuery.isLoading ? <LoadingBlock label="Loading reviews..." /> : (
         <section className="premium-card p-5">
           <SectionHeader kicker="Guest feedback" title="Reviews guests left for your hosting work." />
-          <ReviewList reviews={reviews} emptyTitle="No host reviews yet" emptyText="Reviews appear after guests complete stays and submit their one combined apartment and host review." />
+          <ReviewList reviews={reviews} emptyTitle="No host reviews yet" emptyText="Reviews appear after guests complete stays and submit their one combined property and host review." />
         </section>
       )}
     </WorkspaceShell>
@@ -4358,16 +4439,16 @@ export function HostAnalyticsPage() {
       {dashboardQuery.isLoading ? <LoadingBlock label="Loading analytics..." /> : (
         <>
           <section className="grid gap-4 md:grid-cols-3">
-            <MetricCard metric={{ label: "Listings", value: String(listings.length), delta: "Published apartments", tone: "primary" }} />
+            <MetricCard metric={{ label: "Listings", value: String(listings.length), delta: "Published properties", tone: "primary" }} />
             <MetricCard metric={{ label: "Reservations", value: String(reservations.length), delta: "All host-owned reservations", tone: "accent" }} />
-            <MetricCard metric={{ label: "Average rating", value: listings.length ? (listings.reduce((sum, property) => sum + property.rating, 0) / listings.length).toFixed(1) : "0.0", delta: "Across active apartments", tone: "success" }} />
+            <MetricCard metric={{ label: "Average rating", value: listings.length ? (listings.reduce((sum, property) => sum + property.rating, 0) / listings.length).toFixed(1) : "0.0", delta: "Across active properties", tone: "success" }} />
           </section>
           <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
             <ChartPanel title="Revenue and demand"><RevenueChart data={chartData} /></ChartPanel>
             <ChartPanel title="Reservation status mix">{sourceData.length ? <SourceChart data={sourceData} /> : <EmptyState title="No reservation mix yet" text="Reservation status analytics appear after guests request stays." />}</ChartPanel>
           </section>
           <section className="premium-card p-5">
-            <SectionHeader kicker="Listing performance" title="Apartment health at a glance." />
+            <SectionHeader kicker="Listing performance" title="Property health at a glance." />
             <div className="mt-5 grid gap-3">
               {listings.length ? listings.map((property) => (
                 <div key={property.id} className="grid gap-3 rounded-2xl bg-surface-2 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
@@ -4377,7 +4458,7 @@ export function HostAnalyticsPage() {
                   </div>
                   <Badge tone={property.verified ? "success" : "warning"}>{property.rating.toFixed(1)} stars</Badge>
                 </div>
-              )) : <EmptyState title="No analytics yet" text="Publish an apartment to unlock listing performance." />}
+              )) : <EmptyState title="No analytics yet" text="Publish a property to unlock listing performance." />}
             </div>
           </section>
         </>
@@ -4394,7 +4475,7 @@ export function HostSettingsPage() {
           <SectionHeader kicker="Hosting rules" title="Operational safeguards." />
           <div className="mt-5 grid gap-3">
             <StatusRow label="Host reservation approvals enabled" tone="success" />
-            <StatusRow label="Accepted bookings block apartment calendar dates" tone="success" />
+            <StatusRow label="Accepted bookings block property calendar dates" tone="success" />
             <StatusRow label="Host API only returns your own reservations" tone="success" />
             <StatusRow label="Guests can message after booking request" tone="success" />
           </div>
@@ -4536,14 +4617,25 @@ function CalendarPanel({
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+            {calendarQuery.isLoading ? <Badge tone="neutral">Loading</Badge> : <Badge tone="success">Synced</Badge>}
           </div>
         </div>
       </div>
-      <div className="mt-5 overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable]">
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Badge tone="success">Accepted</Badge>
+        <Badge tone="warning">Request</Badge>
+        <Badge tone="error">Blocked</Badge>
+        <Badge tone="neutral">Open</Badge>
+      </div>
+      <div className="mt-4 overflow-x-auto overscroll-x-contain pb-2 [scrollbar-gutter:stable]">
         <div className="grid min-w-[620px] grid-cols-7 gap-2">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+            <div key={day} className="px-2 pb-1 text-center text-[11px] font-black uppercase tracking-[0.14em] text-muted">{day}</div>
+          ))}
           {dates.map((date) => {
             const row = rows.get(date);
             const closed = row?.closed ?? false;
+            const outsideMonth = monthStartIso(date) !== month;
             const reservation = reservationsForProperty.find((booking) => {
               const checkIn = booking.checkIn || String(booking.payload?.checkIn || "");
               const checkOut = booking.checkOut || String(booking.payload?.checkOut || "");
@@ -4558,6 +4650,7 @@ function CalendarPanel({
               onClick={() => reservation ? setSelectedReservation(reservation) : propertyId ? updateCalendar.mutate({ calendarDate: date, availableUnits: closed ? 1 : 0, minNights: row?.minNights || 1, closed: !closed, priceOverride: row?.priceOverride ?? null }) : undefined}
               className={cn(
                 "min-h-20 rounded-2xl border border-line p-2 text-left text-xs font-bold transition hover:-translate-y-0.5",
+                outsideMonth && "opacity-45",
                 reservation
                   ? accepted
                     ? "border-success/30 bg-success/10 text-success"
@@ -4581,13 +4674,18 @@ function CalendarPanel({
             const canComplete = rawStatus === "confirmed";
             return (
               <>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <Badge tone={reservationStatusTone(selectedReservation.statusRaw || selectedReservation.status)}>{selectedReservation.status}</Badge>
               <h3 className="mt-3 text-xl font-semibold tracking-[-0.04em] text-ink">{selectedReservation.propertyTitle || selectedReservation.propertyName}</h3>
               <p className="mt-1 text-sm font-semibold text-ink-soft">{selectedReservation.guestName || "Guest"}{selectedReservation.guestEmail ? ` / ${selectedReservation.guestEmail}` : ""}</p>
             </div>
-            <p className="text-2xl font-semibold tracking-[-0.05em] text-ink">{currency(selectedReservation.total)}</p>
+            <div className="flex items-start gap-3">
+              <p className="text-2xl font-semibold tracking-[-0.05em] text-ink">{currency(selectedReservation.total)}</p>
+              <button type="button" onClick={() => setSelectedReservation(null)} className="grid h-9 w-9 place-items-center rounded-full border border-line bg-surface text-ink-soft transition hover:bg-surface-3 hover:text-ink" aria-label="Close reservation details">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
           <p className="mt-3 text-sm font-bold text-muted">
             {formatFriendlyDate(selectedReservation.checkIn || String(selectedReservation.payload?.checkIn || ""))} - {formatFriendlyDate(selectedReservation.checkOut || String(selectedReservation.payload?.checkOut || ""))} / {selectedReservation.nights} nights
@@ -4614,10 +4712,10 @@ function CalendarPanel({
 }
 
 const onboardingStepMeta = [
-  { title: "Basics", detail: "Choose the apartment type and set the first guest-facing positioning.", icon: Building2 },
+  { title: "Basics", detail: "Choose the property type and set the first guest-facing positioning.", icon: Building2 },
   { title: "Location", detail: "Add the address, city, country, and neighborhood guests will evaluate.", icon: MapPin },
   { title: "Amenities", detail: "Select the features that help guests compare your place quickly.", icon: Sparkles },
-  { title: "Photos", detail: "Upload real house photos and choose the image that leads the listing.", icon: Plus },
+  { title: "Photos", detail: "Upload real property photos and choose the image that leads the listing.", icon: Plus },
   { title: "Pricing", detail: "Set nightly price, cleaning fee, and simple revenue expectations.", icon: Wallet },
   { title: "Calendar", detail: "Prepare availability rules before travelers request dates.", icon: CalendarDays },
   { title: "Preview", detail: "Review the announcement as guests will see it in search and booking.", icon: BadgeCheck },
@@ -4713,7 +4811,7 @@ export function HostOnboarding() {
           </header>
           <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
             <aside className="h-fit overflow-hidden rounded-[1.75rem] border border-line bg-surface p-4 shadow-soft sm:p-5 xl:sticky xl:top-6">
-              <Badge tone="primary"><Plus className="h-3.5 w-3.5" /> Apartment onboarding</Badge>
+              <Badge tone="primary"><Plus className="h-3.5 w-3.5" /> Property onboarding</Badge>
               <h1 className="h3-type mt-4">Build a listing guests can trust.</h1>
               <p className="mt-3 text-sm font-semibold leading-6 text-ink-soft">A focused workflow for photos, price, address, calendar, and the details travelers check before requesting dates.</p>
               <div className="mt-5 rounded-[1.35rem] bg-surface-2 p-4">
@@ -4802,7 +4900,7 @@ function OnboardingPreview({
           </div>
         </div>
         <div className="p-5">
-          <p className="caption-type">{property.type || "Apartment"} listing</p>
+          <p className="caption-type">{property.type || "Property"} listing</p>
           <h3 className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-ink">{property.title}</h3>
           <p className="mt-2 text-sm font-bold text-ink-soft">{property.neighborhood || property.city || "Location pending"} / {property.guests} guests / {property.bedrooms} bedrooms</p>
           <div className="mt-5 grid grid-cols-2 gap-3">
@@ -4815,7 +4913,7 @@ function OnboardingPreview({
               <p className="mt-1 text-xl font-semibold text-ink">{property.gallery.length}</p>
             </div>
           </div>
-          <p className="mt-5 text-sm font-semibold leading-6 text-ink-soft">{property.description || "Add a concise description that tells guests what makes this apartment comfortable, practical, and easy to book."}</p>
+          <p className="mt-5 text-sm font-semibold leading-6 text-ink-soft">{property.description || "Add a concise description that tells guests what makes this property comfortable, practical, and easy to book."}</p>
         </div>
       </div>
       <div className="rounded-[1.75rem] border border-line bg-surface p-5 shadow-soft">
@@ -4836,7 +4934,7 @@ function AddressStep({ value, onChange }: { value: { title: string; address: str
   const update = (key: keyof typeof value, nextValue: string) => onChange((draft: typeof value) => ({ ...draft, [key]: nextValue }));
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <label className="md:col-span-2"><span className="caption-type">Apartment title</span><input className="input-control mt-2" value={value.title} onChange={(event) => update("title", event.target.value)} placeholder="Sunny apartment near the old town" /></label>
+      <label className="md:col-span-2"><span className="caption-type">Property title</span><input className="input-control mt-2" value={value.title} onChange={(event) => update("title", event.target.value)} placeholder="Quiet riad near the medina" /></label>
       <label><span className="caption-type">Address</span><input className="input-control mt-2" value={value.address} onChange={(event) => update("address", event.target.value)} /></label>
       <label><span className="caption-type">City</span><input className="input-control mt-2" value={value.city} onChange={(event) => update("city", event.target.value)} /></label>
       <label><span className="caption-type">Country</span><input className="input-control mt-2" value={value.country} onChange={(event) => update("country", event.target.value)} /></label>
@@ -4847,7 +4945,22 @@ function AddressStep({ value, onChange }: { value: { title: string; address: str
 }
 
 function AmenityStep({ selected, onToggle }: { selected: string[]; onToggle: (value: string) => void }) {
-  return <div className="grid gap-3 md:grid-cols-3">{amenityOptions.map((item) => <label key={item} className="rounded-2xl bg-surface-2 p-4 text-sm font-bold"><input className="mr-3" type="checkbox" checked={selected.includes(item)} onChange={() => onToggle(item)} />{item}</label>)}</div>;
+  return (
+    <div className="grid gap-3 md:grid-cols-3">
+      {amenityOptions.map((item) => {
+        const active = selected.includes(item);
+        return (
+          <label key={item} className={cn("flex cursor-pointer items-center justify-between gap-3 rounded-2xl border p-4 text-sm font-bold transition", active ? "border-primary bg-primary/10 text-primary" : "border-line bg-surface-2 text-ink-soft hover:border-primary/35 hover:text-ink")}>
+            <span>{item}</span>
+            <span className={cn("grid h-6 w-6 place-items-center rounded-full border", active ? "border-primary bg-primary text-primary-ink" : "border-line bg-surface")}>
+              {active ? <Check className="h-3.5 w-3.5" /> : null}
+            </span>
+            <input className="sr-only" type="checkbox" checked={active} onChange={() => onToggle(item)} />
+          </label>
+        );
+      })}
+    </div>
+  );
 }
 
 function PhotoStep({ property, onChange }: { property: Property; onChange: (value: any) => void }) {
@@ -4920,8 +5033,8 @@ function PhotoStep({ property, onChange }: { property: Property; onChange: (valu
         <div className="rounded-[1.5rem] border border-line bg-surface-2 p-4">
           <label className="grid cursor-pointer place-items-center rounded-[1.25rem] border border-dashed border-primary/40 bg-primary/10 px-4 py-6 text-center text-primary transition hover:bg-primary/15">
             <Plus className="h-5 w-5" />
-            <span className="mt-2 font-bold">{uploading ? "Uploading photos..." : "Upload house photos"}</span>
-            <span className="mt-1 text-xs font-semibold text-ink-soft">Upload any common house photo. UBOOK rotates and optimizes it for the listing.</span>
+            <span className="mt-2 font-bold">{uploading ? "Uploading photos..." : "Upload property photos"}</span>
+            <span className="mt-1 text-xs font-semibold text-ink-soft">Upload clear room, exterior, and arrival photos. UBOOK uses them across search, details, and reservations.</span>
             <input className="sr-only" type="file" accept="image/*,.heic,.heif,.avif,.tif,.tiff,.bmp" multiple disabled={uploading} onChange={(event) => handleUpload(event.target.files)} />
           </label>
           <div className="mt-4 flex gap-2">
@@ -4956,7 +5069,7 @@ function PricingWizardStep({ value, onChange }: { value: { pricePerNight: number
 }
 
 function AvailabilityStep() {
-  return <div className="grid gap-4 md:grid-cols-3">{["Instant booking", "Request to book", "Block selected dates", "Weekend premium", "Monthly stays", "Minimum 2 nights"].map((item) => <button key={item} className="rounded-[1.5rem] border border-line bg-surface-2 p-5 text-left font-bold">{item}</button>)}</div>;
+  return <div className="grid gap-4 md:grid-cols-3">{["Instant booking", "Request to book", "Block selected dates", "Weekend premium", "Monthly stays", "Minimum 2 nights"].map((item) => <button key={item} type="button" className="rounded-[1.5rem] border border-line bg-surface-2 p-5 text-left font-bold transition hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/10 hover:text-primary">{item}</button>)}</div>;
 }
 
 function PreviewWizard({ property }: { property: Property }) {
