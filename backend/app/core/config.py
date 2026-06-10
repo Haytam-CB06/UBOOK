@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://ubook-f.onrender.com,https://ubook-front.onrender.com"
     frontend_url: str = "http://localhost:5173"
+    production_frontend_url: str = "https://ubook-f.onrender.com"
     auto_create_tables: bool = False
     auto_seed: bool = False
     rate_limit_requests: int = 120
@@ -48,7 +49,7 @@ class Settings(BaseSettings):
     password_reset_minutes: int = 30
     issuer: str = "ubook"
     oauth_state_ttl_seconds: int = 600
-    oauth_javascript_origins: str = "http://localhost:5173/,http://127.0.0.1:5173"
+    oauth_javascript_origins: str = "http://localhost:5173/,http://127.0.0.1:5173,https://ubook-f.onrender.com,https://ubook-front.onrender.com"
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str = "http://localhost:8080//api/auth/oauth/google/callback"
@@ -107,7 +108,10 @@ class Settings(BaseSettings):
 
     @property
     def primary_frontend_url(self) -> str:
-        return self.frontend_url_list[0] if self.frontend_url_list else "http://localhost:5173"
+        primary = self.frontend_url_list[0] if self.frontend_url_list else "http://localhost:5173"
+        if self.environment == "production" and primary.startswith(("http://localhost", "http://127.0.0.1")):
+            return self.production_frontend_url.rstrip("/")
+        return primary.rstrip("/")
 
     @property
     def is_test(self) -> bool:

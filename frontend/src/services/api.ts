@@ -324,16 +324,14 @@ export async function login(payload: LoginPayload) {
   return response.data;
 }
 
-export function buildOAuthStartUrl(provider: OAuthProvider, role?: "Traveler" | "Host" | "Admin" | "Guest" | "Property Owner") {
+export function buildOAuthStartUrl(provider: OAuthProvider) {
   const url = new URL(`${API_BASE_URL}/auth/oauth/${provider}/start`);
-  if (role) {
-    url.searchParams.set("role", role);
-  }
+  url.searchParams.set("role", "Traveler");
   return url.toString();
 }
 
-export function startOAuthLogin(provider: OAuthProvider, role?: "Traveler" | "Host" | "Admin" | "Guest" | "Property Owner") {
-  window.location.assign(buildOAuthStartUrl(provider, role));
+export function startOAuthLogin(provider: OAuthProvider) {
+  window.location.assign(buildOAuthStartUrl(provider));
 }
 
 export async function getOAuthProviders(): Promise<OAuthProviderAvailability> {

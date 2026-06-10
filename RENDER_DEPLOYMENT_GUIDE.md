@@ -34,8 +34,9 @@ Backend:
 - `UBOOK_SECRET_KEY` generated
 - `UBOOK_REFRESH_SECRET_KEY` generated
 - `UBOOK_FIELD_ENCRYPTION_KEY` generated
-- `UBOOK_FRONTEND_URL=https://ubook-front.onrender.com`
-- `UBOOK_CORS_ORIGINS=https://ubook-front.onrender.com`
+- `UBOOK_FRONTEND_URL=https://ubook-f.onrender.com`
+- `UBOOK_CORS_ORIGINS=https://ubook-f.onrender.com,https://ubook-front.onrender.com`
+- `UBOOK_OAUTH_JAVASCRIPT_ORIGINS=https://ubook-f.onrender.com,https://ubook-front.onrender.com`
 - `UBOOK_SECURE_COOKIES=true`
 - `UBOOK_AUTH_COOKIE_SAMESITE=none`
 - `UBOOK_AUTO_CREATE_TABLES=false`

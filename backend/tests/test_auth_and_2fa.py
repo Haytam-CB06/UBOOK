@@ -3,7 +3,8 @@ from __future__ import annotations
 import pyotp
 
 from app.core.database import SessionLocal
-from app.models import User
+from app.models import Role, User
+from app.api.auth import _create_oauth_user
 
 from conftest import auth_headers
 
@@ -50,6 +51,29 @@ def test_refresh_survives_render_proxy_ip_changes(client):
     )
     assert refresh.status_code == 200, refresh.text
     assert refresh.json()["accessToken"]
+
+
+def test_social_signup_creates_traveler_account():
+    db = SessionLocal()
+    try:
+        user = _create_oauth_user(
+            db,
+            {
+                "provider": "google",
+                "subject": "oauth-traveler-1",
+                "email": "oauth-traveler@ubook.ma",
+                "email_verified": True,
+                "full_name": "OAuth Traveler",
+                "avatar_url": None,
+                "provider_data": {},
+            },
+        )
+        assert user.role == Role.guest
+        assert user.traveler_profile is not None
+        assert user.host_profile is None
+    finally:
+        db.rollback()
+        db.close()
 
 
 def test_2fa_setup_login_validate_and_disable(client):

@@ -33,10 +33,10 @@ services:
         generateValue: true
 
       - key: UBOOK_FRONTEND_URL
-        value: https://ubook-front.onrender.com
+        value: https://ubook-f.onrender.com
 
       - key: UBOOK_CORS_ORIGINS
-        value: https://ubook-front.onrender.com
+        value: https://ubook-f.onrender.com,https://ubook-front.onrender.com
 
       - key: UBOOK_SECURE_COOKIES
         value: true
@@ -70,6 +70,9 @@ services:
 
       - key: UBOOK_GOOGLE_REDIRECT_URI
         value: https://ubook-back.onrender.com/api/auth/oauth/google/callback
+
+      - key: UBOOK_OAUTH_JAVASCRIPT_ORIGINS
+        value: https://ubook-f.onrender.com,https://ubook-front.onrender.com
 
       - key: UBOOK_MICROSOFT_CLIENT_ID
         sync: false

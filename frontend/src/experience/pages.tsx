@@ -1802,14 +1802,17 @@ function AuthShell({ mode }: { mode: "login" | "register" | "forgot" | "verify" 
                       <span className="h-px flex-1 bg-line" />
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <Button type="button" variant="secondary" onClick={() => startOAuthLogin("google", role)}>
+                      <Button type="button" variant="secondary" onClick={() => startOAuthLogin("google")}>
                         Google
                       </Button>
 
-                      <Button type="button" variant="secondary" onClick={() => startOAuthLogin("microsoft", role)}>
+                      <Button type="button" variant="secondary" onClick={() => startOAuthLogin("microsoft")}>
                         Microsoft
                       </Button>
                     </div>
+                    <p className="text-xs font-semibold leading-5 text-muted">
+                      Google and Microsoft signups create a traveler account. You can open host tools after signing in.
+                    </p>
                   </>
                 ) : null}
 

@@ -311,13 +311,13 @@ def _ensure_profile_for_role(db: Session, user: User) -> None:
             user.traveler_profile = profile
 
 
-def _create_oauth_user(db: Session, identity: dict, requested_role: Role) -> User:
+def _create_oauth_user(db: Session, identity: dict) -> User:
     full_name = identity.get("full_name") or (identity["email"].split("@")[0].replace(".", " ").replace("_", " ").strip().title())
     user = User(
         email=identity["email"].lower(),
         full_name=full_name,
         password_hash=hash_password(secrets.token_urlsafe(48)),
-        role=requested_role,
+        role=Role.guest,
         is_active=True,
         email_verified=True,
         avatar_url=identity.get("avatar_url"),
@@ -353,10 +353,6 @@ def _finish_oauth_login(db: Session, request: Request, response: Response | None
     if response is not None:
         _set_auth_cookies(response, token_pair)
     return token_pair
-
-
-def _normalise_oauth_role(raw_role: str | None) -> Role:
-    return _role_from_frontend(raw_role or "Traveler")
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -445,12 +441,11 @@ def oauth_start(provider: OAuthProvider, request: Request, role: str = "Traveler
     state = generate_oauth_state()
     nonce = generate_nonce()
     code_verifier = generate_pkce_verifier()
-    requested_role = _normalise_oauth_role(role)
     cache.set_json(
         f"oauth:state:{state}",
         {
             "provider": provider.value,
-            "role": requested_role.value,
+            "role": Role.guest.value,
             "nonce": nonce,
             "code_verifier": code_verifier,
             "frontend_origin": frontend_origin,
@@ -512,7 +507,6 @@ async def oauth_callback(provider: OAuthProvider, request: Request, response: Re
         logger.exception("OAuth callback failed for provider=%s", provider_name)
         return RedirectResponse(_login_redirect_url(error=_oauth_error_message(exc), frontend_origin=frontend_origin), status_code=status.HTTP_303_SEE_OTHER)
 
-    requested_role = _normalise_oauth_role(state_payload.get("role"))
     user = _find_user_by_oauth_identity(db, identity.provider, identity.subject)
     found_by_identity = user is not None
     linked_existing_email = False
@@ -553,7 +547,6 @@ async def oauth_callback(provider: OAuthProvider, request: Request, response: Re
                 "avatar_url": identity.avatar_url,
                 "provider_data": identity.provider_data,
             },
-            requested_role,
         )
 
     _ensure_profile_for_role(db, user)
