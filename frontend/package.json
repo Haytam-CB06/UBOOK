@@ -10,7 +10,9 @@
   "scripts": {
     "dev": "vite --force",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "postbuild": "node scripts/write-spa-fallback.mjs",
+    "preview": "node server.mjs",
+    "start": "node server.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.0",
