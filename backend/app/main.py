@@ -118,6 +118,7 @@ def _csrf_error(request: Request) -> str | None:
         f"{settings.api_prefix}/auth/register",
         f"{settings.api_prefix}/auth/refresh",
         f"{settings.api_prefix}/auth/logout",
+        f"{settings.api_prefix}/auth/oauth/session",
         f"{settings.api_prefix}/auth/forgot-password",
         f"{settings.api_prefix}/auth/reset-password",
         f"{settings.api_prefix}/auth/2fa/validate",

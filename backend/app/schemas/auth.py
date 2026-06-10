@@ -41,6 +41,11 @@ class LogoutRequest(CamelInputModel):
     refresh_token: str | None = None
 
 
+class OAuthSessionRequest(CamelInputModel):
+    field_aliases = {"sessionCode": "code", "session": "code"}
+    code: str
+
+
 class AuthResponse(BaseModel):
     access_token: str = Field(serialization_alias="accessToken")
     refresh_token: str = Field(serialization_alias="refreshToken")

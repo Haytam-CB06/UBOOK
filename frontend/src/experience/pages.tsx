@@ -87,6 +87,7 @@ import {
   confirmPayment,
   checkAvailability,
   clearAuthSession,
+  completeOAuthSession,
   completeHostReservation,
   confirmHostReservation,
   createPayment,
@@ -1861,6 +1862,63 @@ export function LoginPage() {
 
 export function RegisterPage() {
   return <AuthShell mode="register" />;
+}
+
+export function OAuthCallbackPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const code = searchParams.get("code") || searchParams.get("session") || searchParams.get("sessionCode");
+    const redirectTo = searchParams.get("redirectTo") || searchParams.get("redirect");
+
+    if (!code) {
+      navigate("/login?oauthError=oauth_session_missing", { replace: true });
+      return;
+    }
+
+    let cancelled = false;
+    completeOAuthSession(code)
+      .then((response) => {
+        if (cancelled) return;
+        queryClient.invalidateQueries({ queryKey: ["current-user"] });
+        const target = safeRedirectPath(redirectTo, workspacePathForUser(response.user as AuthUserLike | undefined));
+        navigate(target, { replace: true });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(getApiErrorMessage(err, "Social sign-in expired. Please try again."));
+        window.setTimeout(() => {
+          navigate("/login?oauthError=oauth_session_expired", { replace: true });
+        }, 1800);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, queryClient, searchParams]);
+
+  return (
+    <MotionPage>
+      <div className="min-h-screen bg-canvas">
+        <PublicNav />
+        <main className="page-shell flex min-h-[70vh] items-center justify-center py-12">
+          <section className="premium-panel max-w-lg p-8 text-center">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-3xl bg-primary/10 text-primary">
+              <ShieldCheck className="h-7 w-7" />
+            </div>
+            <h1 className="h3-type mt-5">Finishing secure sign-in</h1>
+            <p className="body-type mt-3">
+              We are connecting your social account and preparing your traveler workspace.
+            </p>
+            {error ? <div className="mt-5 rounded-2xl bg-error/10 p-3 text-sm font-semibold text-error">{error}</div> : null}
+          </section>
+        </main>
+      </div>
+    </MotionPage>
+  );
 }
 
 export function ForgotPasswordPage() {

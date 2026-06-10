@@ -4,7 +4,8 @@ import pyotp
 
 from app.core.database import SessionLocal
 from app.models import Role, User
-from app.api.auth import _create_oauth_user
+from app.api.auth import _create_oauth_user, _oauth_callback_redirect_url
+from app.core.cache import cache
 
 from conftest import auth_headers
 
@@ -74,6 +75,28 @@ def test_social_signup_creates_traveler_account():
     finally:
         db.rollback()
         db.close()
+
+
+def test_oauth_session_exchange_is_one_time(client):
+    login = client.post("/api/auth/login", json={"email": "guest@ubook.ma", "password": "GuestPass123!"})
+    assert login.status_code == 200, login.text
+    cache.set_json("oauth:session:test-oauth-session", login.json(), 60)
+
+    exchange = client.post("/api/auth/oauth/session", json={"code": "test-oauth-session"})
+    assert exchange.status_code == 200, exchange.text
+    assert exchange.json()["accessToken"]
+    assert exchange.json()["user"]["role"] == "Traveler"
+
+    replay = client.post("/api/auth/oauth/session", json={"code": "test-oauth-session"})
+    assert replay.status_code == 401
+
+
+def test_oauth_callback_redirects_to_safe_frontend_handoff():
+    user = User(id=123, email="oauth@ubook.ma", full_name="OAuth Traveler", role=Role.guest)
+    redirect = _oauth_callback_redirect_url(user, "safe-code", "https://ubook-f.onrender.com")
+    assert redirect.startswith("https://ubook-f.onrender.com/oauth/callback?")
+    assert "code=safe-code" in redirect
+    assert "redirectTo=%2Fdashboard" in redirect
 
 
 def test_2fa_setup_login_validate_and_disable(client):

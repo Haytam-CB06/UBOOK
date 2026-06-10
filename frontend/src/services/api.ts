@@ -334,6 +334,12 @@ export function startOAuthLogin(provider: OAuthProvider) {
   window.location.assign(buildOAuthStartUrl(provider));
 }
 
+export async function completeOAuthSession(code: string) {
+  const response = await client.post("/auth/oauth/session", { code });
+  persistAuth(response.data);
+  return response.data;
+}
+
 export async function getOAuthProviders(): Promise<OAuthProviderAvailability> {
   const response = await client.get("/auth/oauth/providers");
   return response.data;

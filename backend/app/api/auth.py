@@ -39,6 +39,7 @@ from app.schemas.auth import (
     ForgotPasswordRequest,
     LoginRequest,
     LogoutRequest,
+    OAuthSessionRequest,
     RefreshRequest,
     RegisterRequest,
     ResetPasswordRequest,
@@ -114,6 +115,13 @@ def _login_redirect_url(error: str | None = None, temp_token: str | None = None,
 
 def _workspace_redirect_url(user: User, frontend_origin: str | None = None) -> str:
     return f"{(frontend_origin or settings.primary_frontend_url).rstrip('/')}{_frontend_route_for_user(user)}"
+
+
+def _oauth_callback_redirect_url(user: User, session_code: str, frontend_origin: str | None = None) -> str:
+    from urllib.parse import urlencode
+
+    base = f"{(frontend_origin or settings.primary_frontend_url).rstrip('/')}/oauth/callback"
+    return f"{base}?{urlencode({'code': session_code, 'redirectTo': _frontend_route_for_user(user)})}"
 
 
 def _oauth_error_message(exc: Exception) -> str:
@@ -244,6 +252,12 @@ def _issue_token_pair(db: Session, request: Request, user: User, *, mfa_verified
         "user": _user_payload(user),
         "accessJti": access_jti,
     }
+
+
+def _store_oauth_session(token_pair: dict) -> str:
+    code = secrets.token_urlsafe(32)
+    cache.set_json(f"oauth:session:{code}", token_pair, 120)
+    return code
 
 
 def _aware(value):
@@ -561,9 +575,21 @@ async def oauth_callback(provider: OAuthProvider, request: Request, response: Re
 
     token_pair = _issue_token_pair(db, request, user)
     db.commit()
-    final_response = RedirectResponse(_workspace_redirect_url(user, frontend_origin), status_code=status.HTTP_303_SEE_OTHER)
+    session_code = _store_oauth_session(token_pair)
+    final_response = RedirectResponse(_oauth_callback_redirect_url(user, session_code, frontend_origin), status_code=status.HTTP_303_SEE_OTHER)
     _set_auth_cookies(final_response, token_pair)
     return final_response
+
+
+@router.post("/oauth/session")
+def oauth_session(payload: OAuthSessionRequest, response: Response):
+    session_key = f"oauth:session:{payload.code}"
+    token_pair = cache.get_json(session_key)
+    cache.delete(session_key)
+    if not token_pair:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth session expired. Please sign in again.")
+    _set_auth_cookies(response, token_pair)
+    return token_pair
 
 
 @router.post("/refresh")

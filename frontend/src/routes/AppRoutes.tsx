@@ -20,6 +20,7 @@ import {
   LoginPage,
   MessagesPage,
   MyReservationsPage,
+  OAuthCallbackPage,
   PropertyDetails,
   RegisterPage,
   SearchResults,
@@ -43,6 +44,7 @@ export function AppRoutes() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/verify-email" element={<EmailVerificationPage />} />
+        <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
         <Route path="/dashboard" element={<ProtectedRoute roles={["Traveler"]}><UserDashboard /></ProtectedRoute>} />
         <Route path="/dashboard/wishlist" element={<ProtectedRoute roles={["Traveler"]}><TravelerWishlistPage /></ProtectedRoute>} />
         <Route path="/dashboard/payments" element={<ProtectedRoute roles={["Traveler"]}><TravelerPaymentsPage /></ProtectedRoute>} />
